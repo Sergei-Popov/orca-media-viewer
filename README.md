@@ -7,7 +7,7 @@ link in an agent chat, or `orca file open`, just like images.
 
 | Files                                                        | What opens                                                                                                                      |
 | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
-| `.mkv`, `.mka`, `.weba`                                      | **Media Player** — Orca has no viewer for these and shows "Binary file — cannot display" without the plugin.                    |
+| `.mkv`, `.avi`, `.mka`, `.weba`                              | **Media Player** — Orca has no viewer for these and shows "Binary file — cannot display" without the plugin.                    |
 | `.mp4`, `.m4v`, `.mov`, `.webm`, `.mp3`, `.wav`, `.m4a`, `.aac`, `.ogg`, `.oga`, `.flac`, `.opus` | Orca's own basic player (any size) by default; switch the tab to **Media Player** with the view toggle at the top right of the tab. |
 
 Media Player adds:
@@ -16,7 +16,8 @@ Media Player adds:
 - **save the current frame as PNG** through Orca's save dialog;
 - file info: resolution, duration, measured frame rate, size, type;
 - keyboard shortcuts, Orca's light and dark themes, English and Russian UI;
-- a cover instead of a black frame for audio.
+- a cover instead of a black frame for audio;
+- **AVI** — Xvid, DivX, MPEG-4, H.264, MJPEG, MPEG-1/2 video with MP3, AC3, AAC or PCM sound (see below).
 
 **Icons.** The plugin adds the file icon theme **Media Viewer**: pick it in Orca → Settings →
 Appearance → Icon theme, and `.mp4`, `.mov`, `.mkv`, `.mp3`, `.flac` and other media get a video or
@@ -52,8 +53,17 @@ tab back to it.
 
 Playback uses the Chromium inside Orca. H.264, VP8, VP9 and AV1 video and AAC, MP3, Opus,
 Vorbis, FLAC and PCM audio play everywhere; HEVC (H.265) plays where the OS has a hardware
-decoder (macOS, recent Windows). ProRes, MPEG-2, DivX/Xvid and `.avi` do not play — convert
-them with `ffmpeg -i in.avi -c:v libx264 -c:a aac out.mp4`.
+decoder (macOS, recent Windows). ProRes does not play.
+
+**AVI.** Chromium cannot play `.avi`, so Media Player converts it to MP4 when the tab opens,
+inside the tab and offline: FFmpeg built to WebAssembly (`vendor/ffmpeg`, about 2 MB) decodes
+it, and the browser's own encoders (WebCodecs: H.264 in hardware where the system has it, else
+VP9; Opus or AAC sound) write the MP4 that the player then plays. It takes a moment, shown as
+"Preparing AVI for playback… N %"; a few hundred milliseconds for a short clip, longer for a
+long one. Video: Xvid, DivX 3/4/5, MPEG-4 Part 2, H.264, H.263, MJPEG, MPEG-1/2, raw. Sound: MP3,
+MP2, AC3, AAC, PCM, IMA/MS ADPCM; surround is mixed down to stereo. An AVI with another codec
+(for example WMV or Indeo) shows which codec it is; convert those with
+`ffmpeg -i in.avi -c:v libx264 -c:a aac out.mp4`. The 64 MB editor limit applies.
 
 ## Install
 
@@ -82,6 +92,12 @@ orca plugin shot local.media-viewer --editor path/to/clip.mkv   # PNG of the edi
 - `src/editor.ts` — the custom editor entry: bytes document → Blob → player.
 - `src/player.ts` — the player UI; `src/styles.ts`, `src/icons.ts`, `src/i18n.ts`.
 - `src/format.ts` — pure helpers (types, MIME, time, keys) with tests in `src/format.test.ts`.
+- `src/avi/` — AVI → MP4: `convert.ts` (editor side), `worker.ts` (Web Worker: decoder,
+  WebCodecs, MP4 muxer), `plan.ts` (pure choices, tested in `src/avi-plan.test.ts`).
+- `wasm/avi.c`, `wasm/build.sh` — the AVI decoder on top of FFmpeg 7.1; `wasm/build.sh` builds
+  `vendor/ffmpeg/avi-decoder.{mjs,wasm}` in Docker (`emscripten/emsdk:3.1.74`), see
+  `vendor/ffmpeg/BUILD-INFO`.
+- `vendor/mp4-muxer/` — [mp4-muxer](https://github.com/Vanilagy/mp4-muxer) 5.2.1 (MIT).
 
 Branches follow git-flow: `feature/*` from `develop`, releases through `release/x.y.z` into
 `main`, tagged `vX.Y.Z`. Only the maintainers push and open pull requests.
@@ -91,7 +107,9 @@ Branches follow git-flow: `feature/*` from `develop`, releases through `release/
 **По-русски.** Тема значков **Media Viewer** (Настройки → Внешний вид → Тема значков) даёт
 медиафайлам свои значки во вкладках и в дереве файлов; остальные файлы при ней показываются
 встроенными значками Orca. Видео и аудио во вкладках Orca — из дерева файлов, по ссылке из чата агента или
-через `orca file open`, как картинки. `.mkv`, `.mka`, `.weba` открываются плеером сразу; для
+через `orca file open`, как картинки. `.mkv`, `.avi`, `.mka`, `.weba` открываются плеером сразу
+(AVI при открытии конвертируется в MP4 прямо во вкладке, без сети: Xvid, DivX, H.264, MJPEG,
+MPEG-1/2 со звуком MP3, AC3, AAC, PCM); для
 `.mp4`, `.mov`, `.webm`, `.mp3`, `.flac` и других Orca по умолчанию показывает свой простой
 плеер, а **Media Player** включается переключателем вида справа вверху вкладки. Скорость,
 покадровая перемотка, повтор, сохранение кадра в PNG, сведения о файле, горячие клавиши,
@@ -99,4 +117,6 @@ Branches follow git-flow: `feature/*` from `develop`, releases through `release/
 
 ## License
 
-MIT © Sergei Popov
+MIT © Sergei Popov, except `vendor/ffmpeg/` — FFmpeg, LGPL-2.1-or-later
+(`vendor/ffmpeg/LICENSE`; its source and build script are `wasm/`, FFmpeg 7.1.1 from
+<https://ffmpeg.org>), and `vendor/mp4-muxer/` — MIT (`vendor/mp4-muxer/LICENSE`).

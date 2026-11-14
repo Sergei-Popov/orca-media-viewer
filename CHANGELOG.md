@@ -7,6 +7,16 @@ All notable changes to this plugin are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-14
+
+### Added
+
+- `.avi` opens in Media Player instead of "Binary file — cannot display". The tab converts it to MP4 offline when it opens (FFmpeg in WebAssembly decodes, the browser's WebCodecs encoders write H.264 or VP9 with Opus or AAC) and shows the progress. Video: Xvid, DivX 3/4/5, MPEG-4, H.264, H.263, MJPEG, MPEG-1/2; sound: MP3, MP2, AC3, AAC, PCM, ADPCM, surround mixed down to stereo. Unsupported codecs and damaged files get a clear message.
+
+### Changed
+
+- License is now `MIT AND LGPL-2.1-or-later`: the bundled FFmpeg decoder (`vendor/ffmpeg`) is LGPL; its source and build script are in `wasm/`.
+
 ## [0.2.0] - 2026-11-14
 
 ### Added

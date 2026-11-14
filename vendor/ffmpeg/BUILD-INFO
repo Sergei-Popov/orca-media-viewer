@@ -1,0 +1,1 @@
+FFmpeg 7.1.1, emscripten/emsdk:3.1.74, decoders: mpeg4 msmpeg4v1 msmpeg4v2 msmpeg4v3 h263 h264 mjpeg mpeg1video mpeg2video rawvideo mp3float mp2float mp3 mp2 ac3 aac pcm_s16le pcm_u8 pcm_s24le pcm_s32le pcm_f32le adpcm_ima_wav adpcm_ms
