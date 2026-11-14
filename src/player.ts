@@ -652,7 +652,7 @@ export class Player {
       [s.infoSize, formatBytes(this.source.size)],
       [s.infoResolution, v.videoWidth ? `${v.videoWidth} × ${v.videoHeight}` : s.unknown],
       [s.infoDuration, formatTime(v.duration)],
-      [s.infoFps, this.fpsMeasured ? `${this.fps}` : `≈ ${this.fps} (${s.unknown})`],
+      [s.infoFps, this.fpsMeasured ? `${this.fps}` : `— (${s.infoFpsPending})`],
       [s.infoType, this.source.type || s.unknown]
     ]
     this.info.replaceChildren(

@@ -9,6 +9,35 @@
   "author": { "name": "Sergei Popov", "url": "https://github.com/Sergei-Popov" },
   "repository": "https://github.com/Sergei-Popov/orca-media-viewer",
   "license": "MIT",
+  "icon": "images/icon.png",
+  "cover": {
+    "path": "images/cover.png",
+    "alt": "Media Player in an Orca tab: a paused clip of a sunset over hills, with the seek bar, volume, speed, repeat, snapshot, fit, info and full screen controls below."
+  },
+  "screenshots": [
+    {
+      "path": "images/player-dark.png",
+      "alt": "An .mkv video paused at 0:12 in the Media Player tab with Orca's dark theme.",
+      "caption": "Plays .mkv in a tab, with speed, frame stepping, repeat and snapshots.",
+      "theme": "dark"
+    },
+    {
+      "path": "images/player-light.png",
+      "alt": "The same video in the Media Player tab with Orca's light theme.",
+      "caption": "Plays .mkv in a tab, with speed, frame stepping, repeat and snapshots.",
+      "theme": "light"
+    },
+    {
+      "path": "images/info.png",
+      "alt": "The file info overlay over the video: file, size 1.9 MB, resolution 1920 × 1080, duration 0:30, frame rate, type .mkv.",
+      "caption": "File info: size, resolution, duration, frame rate and type (I)."
+    },
+    {
+      "path": "images/audio.png",
+      "alt": "An audio file in the Media Player: a music note cover above the seek bar at 1:04 of 3:34.",
+      "caption": "Audio gets a cover instead of a black frame."
+    }
+  ],
   "engines": { "orca": ">=1.4.248" },
   "pluginApi": 1,
   "contributes": {
