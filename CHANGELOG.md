@@ -7,6 +7,8 @@ All notable changes to this plugin are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-11-14
+
 ### Added
 
 - Icon, cover and screenshots for the plugin page in Orca and on orca.dev.
