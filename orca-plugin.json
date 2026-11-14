@@ -4,7 +4,7 @@
   "execution": "sandboxed-ui",
   "id": "media-viewer",
   "name": "Media Viewer",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Video and audio in Orca's editor tabs: plays .mkv, .mka and .weba, which Orca cannot show, and adds a full player view to .mp4, .mov, .webm, .mp3, .flac and other media. Speed, frame stepping, repeat, frame snapshots, file info and keyboard shortcuts.",
   "author": { "name": "Sergei Popov", "url": "https://github.com/Sergei-Popov" },
   "repository": "https://github.com/Sergei-Popov/orca-media-viewer",
