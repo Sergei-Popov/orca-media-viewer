@@ -45,7 +45,18 @@
       {
         "id": "media",
         "title": "Media Player",
-        "extensions": [".mkv", ".mka", ".weba"],
+        "icon": "icons/video.png",
+        "extensions": [".mkv"],
+        "entry": "src/editor.ts",
+        "priority": "default",
+        "contentKind": "bytes",
+        "frame": "isolated"
+      },
+      {
+        "id": "media-audio",
+        "title": "Media Player",
+        "icon": "icons/audio.png",
+        "extensions": [".mka", ".weba"],
         "entry": "src/editor.ts",
         "priority": "default",
         "contentKind": "bytes",
@@ -54,11 +65,29 @@
       {
         "id": "media-plus",
         "title": "Media Player",
-        "extensions": [".mp4", ".m4v", ".mov", ".webm", ".mp3", ".wav", ".m4a", ".aac", ".ogg", ".oga", ".flac", ".opus"],
+        "icon": "icons/video.png",
+        "extensions": [".mp4", ".m4v", ".mov", ".webm"],
         "entry": "src/editor.ts",
         "priority": "option",
         "contentKind": "bytes",
         "frame": "isolated"
+      },
+      {
+        "id": "media-plus-audio",
+        "title": "Media Player",
+        "icon": "icons/audio.png",
+        "extensions": [".mp3", ".wav", ".m4a", ".aac", ".ogg", ".oga", ".flac", ".opus"],
+        "entry": "src/editor.ts",
+        "priority": "option",
+        "contentKind": "bytes",
+        "frame": "isolated"
+      }
+    ],
+    "iconThemes": [
+      {
+        "id": "minimal-media",
+        "title": "Minimal + Media",
+        "path": "icons/theme.json"
       }
     ]
   },
