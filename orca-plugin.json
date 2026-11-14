@@ -4,7 +4,7 @@
   "execution": "sandboxed-ui",
   "id": "media-viewer",
   "name": "Media Viewer",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Video and audio in Orca's editor tabs: plays .mkv, .mka and .weba, which Orca cannot show, and adds a full player view to .mp4, .mov, .webm, .mp3, .flac and other media. Speed, frame stepping, repeat, frame snapshots, file info and keyboard shortcuts.",
   "author": { "name": "Sergei Popov", "url": "https://github.com/Sergei-Popov" },
   "repository": "https://github.com/Sergei-Popov/orca-media-viewer",
@@ -45,7 +45,18 @@
       {
         "id": "media",
         "title": "Media Player",
-        "extensions": [".mkv", ".mka", ".weba"],
+        "icon": "icons/video.png",
+        "extensions": [".mkv"],
+        "entry": "src/editor.ts",
+        "priority": "default",
+        "contentKind": "bytes",
+        "frame": "isolated"
+      },
+      {
+        "id": "media-audio",
+        "title": "Media Player",
+        "icon": "icons/audio.png",
+        "extensions": [".mka", ".weba"],
         "entry": "src/editor.ts",
         "priority": "default",
         "contentKind": "bytes",
@@ -54,11 +65,29 @@
       {
         "id": "media-plus",
         "title": "Media Player",
-        "extensions": [".mp4", ".m4v", ".mov", ".webm", ".mp3", ".wav", ".m4a", ".aac", ".ogg", ".oga", ".flac", ".opus"],
+        "icon": "icons/video.png",
+        "extensions": [".mp4", ".m4v", ".mov", ".webm"],
         "entry": "src/editor.ts",
         "priority": "option",
         "contentKind": "bytes",
         "frame": "isolated"
+      },
+      {
+        "id": "media-plus-audio",
+        "title": "Media Player",
+        "icon": "icons/audio.png",
+        "extensions": [".mp3", ".wav", ".m4a", ".aac", ".ogg", ".oga", ".flac", ".opus"],
+        "entry": "src/editor.ts",
+        "priority": "option",
+        "contentKind": "bytes",
+        "frame": "isolated"
+      }
+    ],
+    "iconThemes": [
+      {
+        "id": "media",
+        "title": "Media Viewer",
+        "path": "icons/theme.json"
       }
     ]
   },

@@ -2,13 +2,14 @@
 
 /**
  * Files Orca cannot show at all ("Binary file — cannot display"): the player opens them by
- * default. Keep in step with the `media` editor in `orca-plugin.json`.
+ * default. Keep in step with the `media` and `media-audio` editors in `orca-plugin.json`.
  */
 export const DEFAULT_TYPES = ['mkv', 'mka', 'weba'] as const
 
 /**
  * Files Orca already plays with its own basic viewer, without a size limit: the player is
- * offered in the tab's view toggle instead. Keep in step with the `media-plus` editor.
+ * offered in the tab's view toggle instead. Keep in step with the `media-plus` and
+ * `media-plus-audio` editors.
  */
 export const OPTION_TYPES = [
   'mp4',
