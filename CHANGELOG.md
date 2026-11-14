@@ -9,7 +9,6 @@ All notable changes to this plugin are documented here. The format follows
 
 ### Added
 
-- File icon theme "Minimal + Media" (Settings → Appearance → Icon theme): video and audio files get their own icons in tabs, the file tree, Quick Open and search, even when Orca's built-in player opens them. It keeps the icons of Orca Minimal Icons (MIT) for everything else.
 - Tabs opened in Media Player show a video or an audio icon instead of the plugin icon.
 
 ### Changed
