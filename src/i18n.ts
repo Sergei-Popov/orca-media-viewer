@@ -1,4 +1,4 @@
-// UI strings in English and Russian; Orca's UI language picks one (`orca.locale`).
+// UI strings of the media player in English and Russian; Orca's UI language picks one (`orca.locale`).
 
 const en = {
   play: 'Play (Space)',
@@ -15,7 +15,8 @@ const en = {
   fullscreen: 'Full screen (F)',
   info: 'File info (I)',
   seek: 'Position',
-  loading: 'Loading video…',
+  loading: 'Loading…',
+  audio: 'Audio',
   infoName: 'File',
   infoSize: 'Size',
   infoResolution: 'Resolution',
@@ -23,7 +24,7 @@ const en = {
   infoFps: 'Frame rate',
   infoType: 'Type',
   unknown: 'unknown',
-  errorTitle: 'This video cannot be played',
+  errorTitle: 'This file cannot be played',
   errorDecode:
     'The codec is not supported by Orca’s built-in Chromium. H.264, VP8/VP9 and AV1 play everywhere; HEVC (H.265) needs hardware support; ProRes, MPEG-2, DivX and AVI do not play.',
   errorNetwork: 'The file could not be read.',
@@ -31,12 +32,6 @@ const en = {
   errorGeneric: 'Playback failed.',
   snapshotSaved: 'Frame saved',
   snapshotFailed: 'Could not save the frame',
-  panelOpen: 'Open video…',
-  panelDrop: 'Drop video files here or click “Open video…”. Any size works: the file is read from disk, not loaded into memory.',
-  panelHint: 'Videos up to 64 MB also open straight from the file tree.',
-  panelRemove: 'Remove from list',
-  panelClear: 'Clear list',
-  panelNotVideo: 'Not a video file',
   readOnly: 'read-only'
 }
 
@@ -57,7 +52,8 @@ const ru: Strings = {
   fullscreen: 'Во весь экран (F)',
   info: 'Сведения о файле (I)',
   seek: 'Позиция',
-  loading: 'Загрузка видео…',
+  loading: 'Загрузка…',
+  audio: 'Аудио',
   infoName: 'Файл',
   infoSize: 'Размер',
   infoResolution: 'Разрешение',
@@ -65,7 +61,7 @@ const ru: Strings = {
   infoFps: 'Частота кадров',
   infoType: 'Тип',
   unknown: 'неизвестно',
-  errorTitle: 'Это видео не воспроизводится',
+  errorTitle: 'Этот файл не воспроизводится',
   errorDecode:
     'Кодек не поддерживается встроенным в Orca Chromium. H.264, VP8/VP9 и AV1 работают везде; HEVC (H.265) — только с аппаратной поддержкой; ProRes, MPEG-2, DivX и AVI не воспроизводятся.',
   errorNetwork: 'Не удалось прочитать файл.',
@@ -73,13 +69,6 @@ const ru: Strings = {
   errorGeneric: 'Ошибка воспроизведения.',
   snapshotSaved: 'Кадр сохранён',
   snapshotFailed: 'Не удалось сохранить кадр',
-  panelOpen: 'Открыть видео…',
-  panelDrop:
-    'Перетащите видеофайлы сюда или нажмите «Открыть видео…». Размер не ограничен: файл читается с диска, а не загружается в память.',
-  panelHint: 'Видео до 64 МБ открываются и прямо из дерева файлов.',
-  panelRemove: 'Убрать из списка',
-  panelClear: 'Очистить список',
-  panelNotVideo: 'Это не видеофайл',
   readOnly: 'только чтение'
 }
 
