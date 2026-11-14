@@ -7,6 +7,14 @@ All notable changes to this plugin are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Icon, cover and screenshots for the plugin page in Orca and on orca.dev.
+
+### Changed
+
+- File info shows "— (measured during playback)" for the frame rate until the clip has played, instead of a guessed "≈ 30 (unknown)".
+
 ## [0.1.0] - 2026-11-14
 
 ### Added
