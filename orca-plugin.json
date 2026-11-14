@@ -1,0 +1,36 @@
+{
+  "$schema": "https://raw.githubusercontent.com/stablyai/orca/main/docs/schemas/plugins/orca-plugin.v2.schema.json",
+  "manifestVersion": 2,
+  "execution": "sandboxed-ui",
+  "id": "video-viewer",
+  "name": "Video Viewer",
+  "version": "0.1.0",
+  "description": "Watch video files inside Orca: open .mp4, .webm, .mov, .m4v and .mkv from the file tree, or any size from the Video Player panel. Speed, frame stepping, repeat, frame snapshots and keyboard shortcuts.",
+  "author": { "name": "Sergei Popov", "url": "https://github.com/Sergei-Popov" },
+  "repository": "https://github.com/Sergei-Popov/orca-video-viewer",
+  "license": "MIT",
+  "engines": { "orca": ">=1.4.248" },
+  "pluginApi": 1,
+  "contributes": {
+    "customEditors": [
+      {
+        "id": "video",
+        "title": "Video",
+        "extensions": [".mp4", ".m4v", ".webm", ".mov", ".mkv"],
+        "entry": "src/editor.ts",
+        "priority": "default",
+        "contentKind": "bytes",
+        "frame": "isolated"
+      }
+    ],
+    "panels": [
+      {
+        "id": "player",
+        "title": "Video Player",
+        "icon": "play",
+        "entry": "src/panel.ts"
+      }
+    ]
+  },
+  "capabilities": []
+}
