@@ -7,6 +7,8 @@ All notable changes to this plugin are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-11-14
+
 ### Added
 
 - Media Player for video and audio in Orca's editor tabs, opened from the file tree, chat file links or `orca file open`.
