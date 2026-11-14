@@ -82,6 +82,13 @@
         "contentKind": "bytes",
         "frame": "isolated"
       }
+    ],
+    "iconThemes": [
+      {
+        "id": "media",
+        "title": "Media Viewer",
+        "path": "icons/theme.json"
+      }
     ]
   },
   "capabilities": []

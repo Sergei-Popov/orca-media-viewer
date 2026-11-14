@@ -9,6 +9,7 @@ All notable changes to this plugin are documented here. The format follows
 
 ### Added
 
+- File icon theme "Media Viewer" (Settings → Appearance → Icon theme): video and audio files get their own icons in tabs, the file tree, Quick Open and search, even when Orca's built-in player opens them. It maps only media files; other files show Orca's built-in icons while it is selected.
 - Tabs opened in Media Player show a video or an audio icon instead of the plugin icon.
 
 ### Changed
