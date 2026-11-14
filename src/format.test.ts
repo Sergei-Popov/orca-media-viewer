@@ -8,7 +8,8 @@ import {
   formatBytes,
   formatRate,
   formatTime,
-  isVideoFile,
+  isAudioType,
+  normalizeType,
   mimeFor,
   seekTarget,
   stepRate,
@@ -45,12 +46,15 @@ test('maps file types to MIME hints', () => {
   assert.equal(mimeFor(undefined), '')
 })
 
-test('recognises video files by suffix or type', () => {
+test('recognises audio types and normalises suffixes', () => {
   assert.equal(extensionOf('clip.MP4'), 'mp4')
   assert.equal(extensionOf('noext'), '')
-  assert.equal(isVideoFile('a.mkv'), true)
-  assert.equal(isVideoFile('a.avi', 'video/x-msvideo'), true)
-  assert.equal(isVideoFile('notes.txt', 'text/plain'), false)
+  assert.equal(normalizeType('.FLAC'), 'flac')
+  assert.equal(isAudioType('mp3'), true)
+  assert.equal(isAudioType('.weba'), true)
+  assert.equal(isAudioType('mkv'), false)
+  assert.equal(mimeFor('mka'), 'audio/x-matroska')
+  assert.equal(mimeFor('opus'), 'audio/ogg')
 })
 
 test('steps through playback rates and stops at the ends', () => {
@@ -93,7 +97,7 @@ test('maps keys to player actions and leaves modified keys to Orca', () => {
 })
 
 test('picks Russian strings for ru locales', () => {
-  assert.equal(stringsFor('ru-RU').panelOpen, 'Открыть видео…')
-  assert.equal(stringsFor('en-US').panelOpen, 'Open video…')
-  assert.equal(stringsFor(undefined).panelOpen, 'Open video…')
+  assert.equal(stringsFor('ru-RU').audio, 'Аудио')
+  assert.equal(stringsFor('en-US').audio, 'Audio')
+  assert.equal(stringsFor(undefined).audio, 'Audio')
 })

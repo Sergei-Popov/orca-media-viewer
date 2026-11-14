@@ -1,13 +1,42 @@
 // Pure helpers with no DOM and no Orca: everything here runs in Node under `orca plugin test`.
 
-/** File suffixes the plugin claims, without the dot. Keep in step with `orca-plugin.json`. */
-export const VIDEO_TYPES = ['mp4', 'm4v', 'webm', 'mov', 'mkv'] as const
+/**
+ * Files Orca cannot show at all ("Binary file — cannot display"): the player opens them by
+ * default. Keep in step with the `media` editor in `orca-plugin.json`.
+ */
+export const DEFAULT_TYPES = ['mkv', 'mka', 'weba'] as const
+
+/**
+ * Files Orca already plays with its own basic viewer, without a size limit: the player is
+ * offered in the tab's view toggle instead. Keep in step with the `media-plus` editor.
+ */
+export const OPTION_TYPES = [
+  'mp4',
+  'm4v',
+  'mov',
+  'webm',
+  'mp3',
+  'wav',
+  'm4a',
+  'aac',
+  'ogg',
+  'oga',
+  'flac',
+  'opus'
+] as const
+
+const AUDIO_TYPES = new Set(['mka', 'weba', 'mp3', 'wav', 'm4a', 'aac', 'ogg', 'oga', 'flac', 'opus'])
 
 /** Playback speeds offered in the speed menu and stepped through with `<` and `>`. */
 export const RATES = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 3] as const
 
-/** Orca's limit for a document sent to a custom editor; larger files go through the panel. */
+/** Orca's limit for a document sent to a custom editor; Orca shows its own notice above it. */
 export const EDITOR_LIMIT_BYTES = 64 * 1024 * 1024
+
+/** `.MP4` → `mp4`. */
+export function normalizeType(fileType: string | undefined): string {
+  return (fileType ?? '').replace(/^\./, '').toLowerCase()
+}
 
 /** The suffix of a file name in lower case, without the dot: `clip.MP4` → `mp4`. */
 export function extensionOf(name: string): string {
@@ -15,12 +44,17 @@ export function extensionOf(name: string): string {
   return dot < 0 || dot === name.length - 1 ? '' : name.slice(dot + 1).toLowerCase()
 }
 
+/** True for audio-only containers: the player shows a cover instead of a black frame. */
+export function isAudioType(fileType: string | undefined): boolean {
+  return AUDIO_TYPES.has(normalizeType(fileType))
+}
+
 /**
  * A MIME type for a Blob of this file type. Chromium sniffs the container anyway, so this is a
  * hint: QuickTime files are ISO BMFF and play as `video/mp4`, Matroska through the WebM demuxer.
  */
 export function mimeFor(fileType: string | undefined): string {
-  switch ((fileType ?? '').replace(/^\./, '').toLowerCase()) {
+  switch (normalizeType(fileType)) {
     case 'mp4':
     case 'm4v':
     case 'mov':
@@ -29,14 +63,27 @@ export function mimeFor(fileType: string | undefined): string {
       return 'video/webm'
     case 'mkv':
       return 'video/x-matroska'
+    case 'mka':
+      return 'audio/x-matroska'
+    case 'weba':
+      return 'audio/webm'
+    case 'mp3':
+      return 'audio/mpeg'
+    case 'wav':
+      return 'audio/wav'
+    case 'm4a':
+      return 'audio/mp4'
+    case 'aac':
+      return 'audio/aac'
+    case 'ogg':
+    case 'oga':
+    case 'opus':
+      return 'audio/ogg'
+    case 'flac':
+      return 'audio/flac'
     default:
       return ''
   }
-}
-
-/** True when the panel should accept this file: a claimed suffix or any `video/*` type. */
-export function isVideoFile(name: string, type = ''): boolean {
-  return type.startsWith('video/') || (VIDEO_TYPES as readonly string[]).includes(extensionOf(name))
 }
 
 /** `75.5` → `1:15`, `3725` → `1:02:05`. Unknown or negative durations read `--:--`. */

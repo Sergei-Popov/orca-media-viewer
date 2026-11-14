@@ -1,8 +1,9 @@
-// The custom editor: Orca opens a video from the file tree here and sends its bytes (files up to
-// 64 MiB; Orca keeps larger ones out of custom editors, and the panel plays those). The viewer
-// never edits, so Orca never saves the tab; an outside write reloads the clip at the same spot.
+// The custom editor: Orca opens a media file in a main editor tab here — from the file tree, a file
+// link in a chat, or `orca file open` — and sends its bytes. Orca keeps files over 64 MiB out of
+// custom editors and shows its own notice instead. The player never edits, so Orca never saves the
+// tab; an outside write reloads the media at the same position.
 
-import { mimeFor } from './format'
+import { isAudioType, mimeFor, normalizeType } from './format'
 import { stringsFor } from './i18n'
 import { Player } from './player'
 import { installStyles } from './styles'
@@ -23,15 +24,16 @@ if (!api) {
       player.showMessage(strings.errorTitle, strings.errorText, 'error')
       return
     }
-    const fileType = (doc.fileType ?? '').replace(/^\./, '')
+    const fileType = normalizeType(doc.fileType)
     const blob = new Blob([doc.content.bytes], { type: mimeFor(fileType) })
     player.load(
       {
         url: URL.createObjectURL(blob),
         // Orca never tells an editor the file's path or name; the type is all there is.
-        name: fileType ? `video.${fileType}` : 'video',
+        name: fileType ? `media.${fileType}` : 'media',
         size: blob.size,
-        type: fileType ? `.${fileType}` : ''
+        type: fileType ? `.${fileType}` : '',
+        audio: isAudioType(fileType)
       },
       { keepPosition: loaded }
     )

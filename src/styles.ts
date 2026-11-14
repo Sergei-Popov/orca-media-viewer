@@ -142,42 +142,24 @@ button, select, input { font: inherit; color: inherit; }
 .vv-range.seek { flex: 1; }
 .vv-range.volume { width: 72px; flex: none; }
 
-/* Narrow players (the sidebar panel) drop the less used controls. */
+/* Narrow tabs (a split editor) drop the less used controls. */
 @container player (max-width: 420px) {
   .vv-optional { display: none; }
   .vv-range.volume { width: 48px; }
 }
 .vv-player { container: player / inline-size; }
 
-/* The panel around the player: a toolbar, a drop zone and the list of opened files. */
-.vv-panel { display: flex; flex-direction: column; height: 100%; min-height: 0; }
-.vv-panel-head {
-  flex: none; display: flex; align-items: center; gap: 6px; padding: 8px;
-  border-bottom: 1px solid var(--border);
+/* Audio: a cover with the file type instead of a black frame; the <video> still plays it. */
+.vv-cover {
+  position: absolute; inset: 0; display: none; flex-direction: column; align-items: center;
+  justify-content: center; gap: 12px; color: var(--muted-fg); background: var(--bg);
 }
-.vv-panel-head .vv-spacer { flex: 1; }
-.vv-drop {
-  margin: 8px; padding: 18px 14px; border: 1px dashed var(--border); border-radius: var(--radius);
-  color: var(--muted-fg); text-align: center; display: flex; flex-direction: column; gap: 6px;
-  align-items: center;
-}
-.vv-drop .vv-icon { width: 28px; height: 28px; }
-.vv-panel.dragging .vv-drop, .vv-panel.dragging .vv-panel-player { outline: 2px dashed var(--ring); outline-offset: -4px; }
-.vv-panel-player { flex: 1 1 60%; min-height: 160px; display: none; }
-.vv-panel.has-video .vv-panel-player { display: block; }
-.vv-panel.has-video .vv-drop { display: none; }
-.vv-list { flex: 0 1 auto; max-height: 40%; overflow: auto; margin: 0; padding: 4px; list-style: none; border-top: 1px solid var(--border); }
-.vv-list:empty { display: none; }
-.vv-item {
-  display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-radius: var(--radius);
-  cursor: pointer;
-}
-.vv-item:hover { background: var(--accent); color: var(--accent-fg); }
-.vv-item.current { background: var(--accent); color: var(--accent-fg); font-weight: 600; }
-.vv-item-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.vv-item-size { color: var(--muted-fg); font: 11px var(--mono-font); flex: none; }
-.vv-item .vv-btn { height: 22px; min-width: 22px; opacity: 0.6; }
-.vv-item .vv-btn:hover { opacity: 1; }
+.vv-stage.audio .vv-cover { display: flex; }
+.vv-stage.audio { background: var(--bg); }
+.vv-stage.audio .vv-video { visibility: hidden; }
+.vv-cover .vv-icon { width: 72px; height: 72px; stroke-width: 1.2; }
+.vv-cover-type { font: 600 12px var(--mono-font); letter-spacing: 0.08em; text-transform: uppercase; }
+.vv-player.audio .vv-video-only { display: none; }
 .vv-toast {
   position: fixed; bottom: 64px; left: 50%; transform: translateX(-50%); padding: 6px 12px;
   border-radius: var(--radius); background: var(--popover); color: var(--popover-fg);

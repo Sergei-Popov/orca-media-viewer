@@ -1,5 +1,5 @@
-// The video player shared by the custom editor and the sidebar panel: a <video> on a black stage,
-// overlays for errors, info and feedback, and a control bar drawn from Orca's theme.
+// The media player of the editor tab: a <video> on a black stage (or a cover for audio), overlays
+// for errors, info and feedback, and a control bar drawn from Orca's theme.
 
 import {
   RATES,
@@ -23,8 +23,10 @@ export type VideoSource = {
   url: string
   name: string
   size: number
-  /** The file type or MIME type shown in the info overlay. */
+  /** The file type shown in the info overlay, e.g. `.mkv`. */
   type: string
+  /** An audio-only file: show a cover and hide the picture-only controls. */
+  audio?: boolean
 }
 
 export type LoadOptions = {
@@ -36,9 +38,9 @@ export type LoadOptions = {
 
 export type PlayerOptions = {
   strings: Strings
-  /** Called when a clip ends without repeat, e.g. to play the next file of a list. */
+  /** Called when a clip ends without repeat. */
   onEnded?: () => void
-  /** Keep the page's keyboard shortcuts to this player (false when several players share it). */
+  /** Listen for the page's keyboard shortcuts (default true). */
   keyboard?: boolean
 }
 
@@ -120,6 +122,8 @@ export class Player {
   private readonly message: HTMLDivElement
   private readonly info: HTMLDListElement
   private readonly toast: HTMLDivElement
+  private readonly cover: HTMLDivElement
+  private readonly coverType: HTMLDivElement
   private readonly playButton: HTMLButtonElement
   private readonly muteButton: HTMLButtonElement
   private readonly loopButton: HTMLButtonElement
@@ -156,7 +160,11 @@ export class Player {
     this.message = el('div', 'vv-message')
     this.info = el('dl', 'vv-info')
     this.toast = el('div', 'vv-toast', { role: 'status' })
-    this.stage.append(this.video, this.flash, this.badge, this.info, this.message)
+    this.cover = el('div', 'vv-cover')
+    this.cover.innerHTML = icon('music')
+    this.coverType = el('div', 'vv-cover-type')
+    this.cover.append(this.coverType)
+    this.stage.append(this.video, this.cover, this.flash, this.badge, this.info, this.message)
 
     const bar = el('div', 'vv-bar')
     const seekRow = el('div', 'vv-seek-row')
@@ -166,8 +174,8 @@ export class Player {
 
     const controls = el('div', 'vv-controls')
     this.playButton = iconButton('play', s.play)
-    const frameBack = iconButton('frameBack', s.frameBack, 'vv-optional')
-    const frameForward = iconButton('frameForward', s.frameForward, 'vv-optional')
+    const frameBack = iconButton('frameBack', s.frameBack, 'vv-optional vv-video-only')
+    const frameForward = iconButton('frameForward', s.frameForward, 'vv-optional vv-video-only')
     this.frameButtons = [frameBack, frameForward]
     this.muteButton = iconButton('volume', s.mute)
     this.volume = el('input', 'vv-range volume', { type: 'range', min: '0', max: '1', step: '0.01', 'aria-label': s.volume, title: s.volume })
@@ -179,10 +187,10 @@ export class Player {
       this.rate.append(option)
     }
     this.loopButton = iconButton('loop', s.loop)
-    this.snapshotButton = iconButton('camera', s.snapshot, 'vv-optional')
-    this.fitButton = iconButton('actual', s.fit, 'vv-optional')
+    this.snapshotButton = iconButton('camera', s.snapshot, 'vv-optional vv-video-only')
+    this.fitButton = iconButton('actual', s.fit, 'vv-optional vv-video-only')
     this.infoButton = iconButton('info', s.info)
-    this.fullscreenButton = iconButton('fullscreen', s.fullscreen)
+    this.fullscreenButton = iconButton('fullscreen', s.fullscreen, 'vv-video-only')
     controls.append(
       this.playButton,
       frameBack,
@@ -223,12 +231,16 @@ export class Player {
     this.fpsMeasured = false
     this.hideMessage()
     this.stage.classList.remove('empty')
+    this.setAudio(source.audio === true)
     this.video.src = source.url
     this.video.load()
     if (previous && previous.url !== source.url) {
       URL.revokeObjectURL(previous.url)
     }
     const onReady = () => {
+      if (!this.video.videoWidth) {
+        this.setAudio(true)
+      }
       if (resumeAt > 0) {
         this.video.currentTime = Math.min(resumeAt, this.video.duration || resumeAt)
       }
@@ -265,6 +277,7 @@ export class Player {
     this.video.removeAttribute('src')
     this.video.load()
     this.stage.classList.add('empty')
+    this.setAudio(false)
     this.info.classList.remove('show')
     this.hideMessage()
     this.setControlsEnabled(false)
@@ -320,7 +333,7 @@ export class Player {
         }
         break
       case 'frame':
-        this.stepFrame(action.direction)
+        if (!this.root.classList.contains('audio')) this.stepFrame(action.direction)
         break
       case 'volume':
         this.setVolume(v.volume + action.delta)
@@ -339,16 +352,16 @@ export class Player {
         this.setLoop(!v.loop)
         break
       case 'fullscreen':
-        void this.toggleFullscreen()
+        if (!this.root.classList.contains('audio')) void this.toggleFullscreen()
         break
       case 'info':
         this.toggleInfo()
         break
       case 'snapshot':
-        void this.snapshot()
+        if (!this.root.classList.contains('audio')) void this.snapshot()
         break
       case 'fit':
-        this.toggleFit()
+        if (!this.root.classList.contains('audio')) this.toggleFit()
         break
     }
   }
@@ -374,6 +387,7 @@ export class Player {
     on(this.infoButton, 'click', () => this.toggleInfo())
     on(this.fullscreenButton, 'click', () => void this.toggleFullscreen())
     on(this.video, 'click', () => this.togglePlay())
+    on(this.cover, 'click', () => this.togglePlay())
     on(this.video, 'dblclick', () => void this.toggleFullscreen())
     on(this.volume, 'input', () => this.setVolume(Number(this.volume.value)))
     on(this.rate, 'change', () => this.setRate(Number(this.rate.value)))
@@ -443,6 +457,12 @@ export class Player {
 
   private persist(): void {
     savePrefs(this.prefs)
+  }
+
+  private setAudio(audio: boolean): void {
+    this.root.classList.toggle('audio', audio)
+    this.stage.classList.toggle('audio', audio)
+    this.coverType.textContent = audio ? (this.source?.type.replace(/^\./, '') || this.s.audio) : ''
   }
 
   private togglePlay(): void {
