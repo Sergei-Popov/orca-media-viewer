@@ -82,13 +82,6 @@
         "contentKind": "bytes",
         "frame": "isolated"
       }
-    ],
-    "iconThemes": [
-      {
-        "id": "minimal-media",
-        "title": "Minimal + Media",
-        "path": "icons/theme.json"
-      }
     ]
   },
   "capabilities": []

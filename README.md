@@ -18,11 +18,6 @@ Media Player adds:
 - keyboard shortcuts, Orca's light and dark themes, English and Russian UI;
 - a cover instead of a black frame for audio.
 
-**Icons.** The plugin adds the file icon theme **Minimal + Media**: pick it in Orca → Settings →
-Appearance → Icon theme, and `.mp4`, `.mov`, `.mkv`, `.mp3`, `.flac` and other media get a video or
-an audio icon in tabs, the file tree, Quick Open and search, also when Orca's own player opens them.
-Other files keep the icons of Orca Minimal Icons (MIT, see `icons/minimal/`).
-
 It is read-only and offline: no capabilities, no network, the file is never modified.
 
 **Size limit.** Orca sends at most 64 MB to a plugin editor and shows its own notice for larger
@@ -87,8 +82,7 @@ Branches follow git-flow: `feature/*` from `develop`, releases through `release/
 
 ---
 
-**По-русски.** Видео и аудио во вкладках Orca. Тема значков **Minimal + Media** (Настройки →
-Внешний вид → Тема значков) даёт медиафайлам свои значки во вкладках и в дереве файлов. Видео и аудио во вкладках Orca — из дерева файлов, по ссылке из чата агента или
+**По-русски.** Видео и аудио во вкладках Orca — из дерева файлов, по ссылке из чата агента или
 через `orca file open`, как картинки. `.mkv`, `.mka`, `.weba` открываются плеером сразу; для
 `.mp4`, `.mov`, `.webm`, `.mp3`, `.flac` и других Orca по умолчанию показывает свой простой
 плеер, а **Media Player** включается переключателем вида справа вверху вкладки. Скорость,
