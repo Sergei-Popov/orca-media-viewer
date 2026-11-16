@@ -7,6 +7,8 @@ All notable changes to this plugin are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-11-16
+
 ### Changed
 
 - Listing images and description: a fuchsia icon, and a cover and four screenshots in the hub's house style, rendered from a generated demo clip in a headless stage (`tools/listing.json`, `tools/make-listing-samples.sh`). The manifest's images carry only a path and an alt, and the description now starts with what the plugin is: a media player.

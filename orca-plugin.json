@@ -4,7 +4,7 @@
   "execution": "sandboxed-ui",
   "id": "media-viewer",
   "name": "Media Viewer",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "A media player in Orca's editor tabs: plays .mkv, .avi, .mka and .weba, which Orca cannot show (AVI is converted offline in the tab), and a full player view for .mp4, .mov, .webm, .mp3, .flac and more. Speed, frame stepping, repeat, frame snapshots, file info, shortcuts, media file icons.",
   "author": {
     "name": "Sergei Popov",
