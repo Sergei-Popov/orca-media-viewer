@@ -72,13 +72,35 @@ test('builds the MP4 muxer for a 24000/1001 (23.976 fps) AVI', () => {
   assert.equal(keyFrameInterval(fps), 48)
 })
 
-test('tags SD frames BT.601 and leaves HD to WebCodecs (BT.709)', () => {
-  assert.deepEqual(frameColorSpace(360), { matrix: 'smpte170m', primaries: 'smpte170m', transfer: 'smpte170m', fullRange: false })
-  assert.equal(frameColorSpace(576), BT601)
-  assert.equal(frameColorSpace(718), BT601)
-  assert.equal(frameColorSpace(720), undefined)
-  assert.equal(frameColorSpace(1080), undefined)
-  assert.equal(frameColorSpace(0), undefined)
+test('tags SD frames BT.601 by FourCC only for codecs without a colour description', () => {
+  assert.deepEqual(frameColorSpace(360, 'fourcc:XVID'), { matrix: 'smpte170m', primaries: 'smpte170m', transfer: 'smpte170m', fullRange: false })
+  // MPEG-4 Part 2, MS MPEG-4 (DivX 3), H.263, MJPEG, MPEG-1 and raw video: BT.601 under 720 lines.
+  for (const fourcc of ['XVID', 'DIVX', 'DX50', 'FMP4', 'MP4V', 'xvid', 'DIV3', 'MP43', 'MP42', 'MPG4', 'H263', 'MJPG', 'mjpa', 'MPG1', 'I420', 'DIB', '']) {
+    assert.equal(frameColorSpace(576, `fourcc:${fourcc}`), BT601, fourcc)
+  }
+  // H.264, HEVC and MPEG-2 can say which colours they use: WebCodecs' tag, as in 0.3.0.
+  for (const fourcc of ['H264', 'h264', 'X264', 'AVC1', 'HEVC', 'H265', 'MPG2', 'MPEG', 'WMV3', '?']) {
+    assert.equal(frameColorSpace(360, `fourcc:${fourcc}`), undefined, fourcc)
+  }
+  assert.equal(frameColorSpace(718, 'fourcc:DX50'), BT601)
+  assert.equal(frameColorSpace(720, 'fourcc:XVID'), undefined)
+  assert.equal(frameColorSpace(1080, 'fourcc:MJPG'), undefined)
+  assert.equal(frameColorSpace(0, 'fourcc:XVID'), undefined)
+  // The FourCC comes from the header: strf's compression, else strh's handler.
+  const ascii = (text: string) => [...text].map((c) => c.charCodeAt(0))
+  const le = (value: number, length: number) => Array.from({ length }, (_, i) => Math.floor(value / 256 ** i) % 256)
+  const chunk = (type: string, payload: number[]) => [...ascii(type), ...le(payload.length, 4), ...payload]
+  const aviWith = (compression: string | number[], handler: string) => {
+    const tag = typeof compression === 'string' ? ascii(compression) : compression
+    const bitmap = [...le(40, 4), ...le(640, 4), ...le(360, 4), 1, 0, 24, 0, ...tag, ...new Array<number>(20).fill(0)]
+    const strl = chunk('LIST', [...ascii('strl'), ...chunk('strh', [...ascii('vids'), ...ascii(handler), ...new Array<number>(48).fill(0)]), ...chunk('strf', bitmap)])
+    const body = [...ascii('AVI '), ...chunk('LIST', [...ascii('hdrl'), ...chunk('avih', new Array<number>(56).fill(0)), ...strl])]
+    return new Uint8Array([...ascii('RIFF'), ...le(body.length, 4), ...body])
+  }
+  const codecOf = (file: Uint8Array) => readAviStreams(file).find((track) => track.kind === 'video')?.codec ?? ''
+  assert.equal(frameColorSpace(360, codecOf(aviWith('XVID', 'xvid'))), BT601)
+  assert.equal(frameColorSpace(360, codecOf(aviWith('H264', 'H264'))), undefined)
+  assert.equal(frameColorSpace(360, codecOf(aviWith([0, 0, 0, 0], 'DIB '))), BT601)
 })
 
 test('says a supported codec that fails to open is a damaged file, and names a too-large frame', () => {

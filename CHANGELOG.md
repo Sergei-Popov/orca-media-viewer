@@ -21,7 +21,7 @@ All notable changes to this plugin are documented here. The format follows
 - Sound that cannot play is no longer dropped silently: an MKV, WebM or MP4 whose sound is AC3, E-AC3, DTS or TrueHD, and an AVI with sound the decoder lacks (WMA, DTS, FLAC, G.711), plays the picture with a notice that names the sound codec. An AVI with only such sound names it in the error.
 - WebM and Matroska without a duration (browser recordings, unfinished captures) can be seeked: the player finds the duration when the file opens.
 - AVI conversion errors name the cause: a damaged file, not an unsupported codec, when the codec is built in; the frame size when it is too large for the video encoder; and an AVI from which nothing decodes is an error instead of an empty 0:00 player.
-- SD AVI (Xvid, DivX, MJPEG) keeps its colours: the converted video is tagged BT.601 instead of BT.709, which oversaturated greens and reds.
+- SD AVI in Xvid, DivX, MJPEG and the other codecs that carry no colour description keeps its colours: the converted video is tagged BT.601 instead of BT.709, which oversaturated greens and reds. H.264 and MPEG-2 AVI, whose streams can describe their colours, convert as in 0.3.0, so SD H.264 tagged BT.709 keeps its colours too.
 - The decode error no longer says AVI does not play, and says that AC3, E-AC3, DTS and TrueHD sound does not play.
 - The Russian UI writes sizes, seconds and speeds in Russian (`1,9 МБ`, `+5 с`, `0,5×`), and letter shortcuts work with a Russian keyboard layout.
 - The README gives Orca's real size limits (50 MiB for `.mkv`, `.avi`, `.mka`, `.weba`; 64 MiB for `.mp4`, `.mov`, `.webm` and audio), names `wasm/` as LGPL-2.1-or-later, and runs `orca plugin types .` before the type check.

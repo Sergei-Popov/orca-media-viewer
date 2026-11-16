@@ -86,12 +86,47 @@ export function muxerVideoTrack(codec: 'avc' | 'vp9', width: number, height: num
 export const BT601 = { matrix: 'smpte170m', primaries: 'smpte170m', transfer: 'smpte170m', fullRange: false } as const
 
 /**
- * The colour space to tag the decoded frames with. The decoder hands over I420 planes with no
- * colour description, and WebCodecs would call them BT.709; SD video (under 720 lines) is BT.601,
- * so it is tagged that way and the MP4's colour box says so. HD keeps WebCodecs' BT.709.
+ * FourCCs of the video codecs that carry no colour description, so SD video in them is BT.601:
+ * FFmpeg 7.1.1's tags (libavformat/riff.c) for the decoders mpeg4, msmpeg4v1–3, h263, mjpeg,
+ * mpeg1video and rawvideo, in upper case because the AVI demuxer matches them in any case. The
+ * empty one is uncompressed RGB (BI_RGB), whose stream header names no codec or says `DIB `.
+ * H.264 and MPEG-2 are not here: their streams can say which colours they use.
  */
-export function frameColorSpace(height: number): typeof BT601 | undefined {
-  return height > 0 && height < 720 ? BT601 : undefined
+const NO_COLOUR_DESCRIPTION: ReadonlySet<string> = new Set(
+  [
+    // MPEG-4 Part 2: Xvid, DivX 4/5 and others
+    'FMP4 DIVX DX50 XVID MP4S M4S2 ZMP4 DIV1 BLZ0 MP4V UMP4 WV1F SEDG RMP4 3IV2 WAWV FFDS FVFW DCOD',
+    'MVXM PM4V SMP4 DXGM VIDM M4T3 GEOX G264 HDX4 DM4V DMK2 DYM4 DIGI EPHV EM4A M4CC SN40 VSPX ULDX',
+    'GEOV SIPP SM4V XVIX DREX QMP4 PLV1 GLV4 GMP4 MNM4 GTM4',
+    // MS MPEG-4 v1–3: DivX 3
+    'MPG4 MP41 MP42 DIV2 MP43 DIV3 MPG3 DIV5 DIV6 DIV4 DVX3 AP41 COL1 COL0',
+    // H.263
+    'H263 X263 T263 L263 VX1K ZYGO M263 LSVM U263 VSM4 I263',
+    // Motion JPEG
+    'MJPG MSC2 LJPG DMB1 MJPA JR24 JPGL JPEG IJPG ACDV QIVG SLMJ CJPG IJLV MVJP AVI1 AVI2 MTSJ ZJPG MMJP',
+    // MPEG-1
+    'MPG1 PIM1 BW10 XMPG',
+    // Raw video
+    'I420 YUY2 Y422 V422 YUNV UYNV UYNY UYV1 2VU1 2VUY YUVS YUV2 P422 YV12 YV16 YV24 UYVY VYUY IYUV',
+    'AYUV Y800 Y8 HDYC YVU9 VDTZ Y411 NV12 NV21 Y41B Y42B YUV9 AUV2 YVYU YUYV I410 I411 I422 I440 I444',
+    'J420 J422 J440 J444 YUVA I40A I42A RGB2 RV15 RV16 RV24 RV32 RGBA AV32 GREY I09L I09B I29L I29B',
+    'I49L I49B I0AL I0AB I2AL I2AB I4AL I4AB I4FL I4FB I0CL I0CB I2CL I2CB I4CL I4CB I0FL I0FB DIB'
+  ]
+    .join(' ')
+    .split(' ')
+    .concat([''])
+)
+
+/**
+ * The colour space to tag the decoded frames with. The decoder hands over I420 planes with no
+ * colour description, and WebCodecs would call them BT.709. SD video (under 720 lines) in a codec
+ * that has no colour description is BT.601, so it is tagged that way and the MP4's colour box
+ * says so. `codec` is the AVI's video stream as readAviStreams names it (`fourcc:XVID`). H.264
+ * and MPEG-2 keep WebCodecs' tag, as in 0.3.0, and so does HD.
+ */
+export function frameColorSpace(height: number, codec: string): typeof BT601 | undefined {
+  const fourcc = codec.replace(/^fourcc:/, '').trim().toUpperCase()
+  return height > 0 && height < 720 && NO_COLOUR_DESCRIPTION.has(fourcc) ? BT601 : undefined
 }
 
 /** `1920`, `1080` → `1920 × 1080`, for the 'too-large' message. */

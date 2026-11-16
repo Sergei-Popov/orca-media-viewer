@@ -80,9 +80,11 @@ Convert such files with `ffmpeg -i in.avi -c:v libx264 -c:a aac out.mp4`. Orca's
 
 - **Anamorphic AVI** (non-square pixels, such as a 720 × 576 PAL rip flagged 16:9) plays with
   square pixels, so the picture is too narrow: the conversion keeps the stored frame size.
-- **AVI colours.** The decoder does not pass on a stream's colour description, so converted
-  frames are tagged BT.601 below 720 lines and BT.709 from 720 lines up. A file that differs from
-  that rule plays with slightly shifted colours.
+- **AVI colours.** The decoder does not pass on a stream's colour description. SD video (under
+  720 lines) in a codec that has none (Xvid, DivX and other MPEG-4 Part 2, DivX 3, H.263, MJPEG,
+  MPEG-1, raw) is tagged BT.601; H.264 and MPEG-2, which can have one, and all HD video are tagged
+  BT.709. A file that differs from that rule, such as SD H.264 made for BT.601, plays with
+  slightly shifted colours.
 - **AVI errors.** The decoder reports one error for "codec not built in" and "stream does not
   open". Media Player calls the file damaged when the codec is one it has (Xvid, DivX, H.264,
   MJPEG …); a damaged header that names some other codec reads as that codec being unsupported.
