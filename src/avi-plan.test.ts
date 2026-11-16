@@ -1,6 +1,6 @@
 import { assert, test } from 'orca/testing'
 import { ArrayBufferTarget, Muxer } from '../vendor/mp4-muxer/mp4-muxer.mjs'
-import { aviErrorText } from './avi/messages'
+import { aviErrorText, aviSoundLoss } from './avi/messages'
 import {
   AUDIO_CANDIDATES,
   BT601,
@@ -112,6 +112,20 @@ test('says a supported codec that fails to open is a damaged file, and names a t
   assert.equal(aviErrorText({ code: 'encoder' }, s), 'Orca cannot re-encode video here: WebCodecs is not available.')
   assert.equal(aviErrorText(null, s), 'The AVI file could not be converted.')
   assert.equal(aviErrorText({ code: 'failed' }, stringsFor('ru')), 'Не удалось преобразовать файл AVI.')
+})
+
+test('says the sound could not be decoded when the decoder has its codec, and names the codec when not', () => {
+  const xvid = { kind: 'video' as const, codec: 'fourcc:XVID' }
+  // MP3, PCM, AAC, AC3, MP2, MS and IMA ADPCM: the decoder has them, so no sound means damage.
+  for (const tag of [0x0055, 0x0001, 0x00ff, 0x2000, 0x0050, 0x0002, 0x0011]) {
+    assert.deepEqual(aviSoundLoss([xvid, { kind: 'audio', codec: `wave:${tag}` }]), { soundUndecoded: true }, `tag ${tag}`)
+  }
+  assert.deepEqual(aviSoundLoss([xvid, { kind: 'audio', codec: 'wave:353' }]), { droppedSound: 'WMA' })
+  assert.deepEqual(aviSoundLoss([xvid, { kind: 'audio', codec: 'wave:8193' }]), { droppedSound: 'DTS' })
+  assert.deepEqual(aviSoundLoss([xvid, { kind: 'audio', codec: 'wave:6' }]), { droppedSound: 'A-law (G.711)' })
+  assert.deepEqual(aviSoundLoss([xvid]), {})
+  assert.equal(stringsFor('en').soundUndecoded, 'The sound could not be decoded; playing without sound')
+  assert.equal(stringsFor('ru').soundUndecoded, 'Звук не удалось декодировать; видео играет без звука')
 })
 
 test('names the sound of an AVI that has only sound the decoder cannot read', () => {

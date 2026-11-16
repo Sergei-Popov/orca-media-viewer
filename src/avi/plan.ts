@@ -74,6 +74,15 @@ export const BUILT_IN_VIDEO_DECODERS: readonly string[] = [
 ]
 
 /**
+ * AVI sound format tags the decoder reads: FFmpeg 7.1.1's tags (libavformat/riff.c) for the sound
+ * decoders in vendor/ffmpeg/BUILD-INFO, that is PCM, MS and IMA ADPCM, MP2, MP3, AAC and AC3.
+ * Sound in one of these that gives nothing is damaged, not unsupported.
+ */
+export const BUILT_IN_SOUND_TAGS: readonly number[] = [
+  0x0001, 0x0002, 0x0003, 0x0011, 0x0050, 0x0055, 0x0069, 0x00ff, 0x1600, 0x2000, 0x4143, 0x706d, 0xa106
+]
+
+/**
  * The muxer's video track. It has no `frameRate`: mp4-muxer rejects one that is not a whole
  * number (23.976, 29.97, 12.5) and otherwise keeps its own 57600 timescale, which holds the
  * microsecond timestamps of any rate; a timescale of the rounded rate would shift 23.976 frames.

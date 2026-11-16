@@ -41,6 +41,8 @@ export type VideoSource = {
   videoCodec?: string
   /** The sound codec, when every sound track is in one this player cannot play: it says so. */
   droppedSound?: string
+  /** A sound track in a codec that plays gave no sound (a damaged AVI sound stream): it says so. */
+  soundUndecoded?: boolean
 }
 
 export type LoadOptions = {
@@ -277,6 +279,8 @@ export class Player {
       }
     } else if (source.droppedSound) {
       this.showNotice(this.s.soundDropped.replace('{codec}', source.droppedSound))
+    } else if (source.soundUndecoded) {
+      this.showNotice(this.s.soundUndecoded)
     }
     this.durationProbed = v.duration === Number.POSITIVE_INFINITY
     await this.findDuration()

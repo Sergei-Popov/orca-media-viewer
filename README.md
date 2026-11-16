@@ -72,7 +72,8 @@ VP9; Opus or AAC sound) write the MP4 that the player then plays. It takes a mom
 long one. Video: Xvid, DivX 3/4/5, MPEG-4 Part 2, H.264, H.263, MJPEG, MPEG-1/2, raw. Sound: MP3,
 MP2, AC3, AAC, PCM, IMA/MS ADPCM; surround is mixed down to stereo. An AVI with another video
 codec (for example WMV or Indeo) shows which codec it is. Sound in another codec (WMA, DTS, FLAC,
-Vorbis, G.711) is dropped: the video plays without sound and a notice names the sound codec.
+Vorbis, G.711) is dropped: the video plays without sound and a notice names the sound codec;
+damaged sound in a codec it has plays the same way, with a notice that it could not be decoded.
 Convert such files with `ffmpeg -i in.avi -c:v libx264 -c:a aac out.mp4`. Orca's 50 MiB limit for
 `.avi` applies.
 
