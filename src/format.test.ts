@@ -1,11 +1,14 @@
 import { assert, test } from 'orca/testing'
 import {
+  DEFAULT_TYPES,
+  OPTION_TYPES,
   RATES,
   actionForKey,
   baseName,
-  estimateFps,
+  editorLimitBytes,
   extensionOf,
   formatBytes,
+  formatPercentOf,
   formatRate,
   formatTime,
   infoRows,
@@ -17,6 +20,9 @@ import {
   timestampForFile
 } from './format'
 import { stringsFor } from './i18n'
+
+/** Intl writes a no-break space before some units; tests compare with plain spaces. */
+const plain = (text: string) => text.replace(/\s/g, ' ')
 
 test('formats times as m:ss and h:mm:ss', () => {
   assert.equal(formatTime(0), '0:00')
@@ -73,13 +79,6 @@ test('keeps seeks inside the clip', () => {
   assert.equal(seekTarget(10, 5, Number.NaN), 15)
 })
 
-test('estimates common frame rates', () => {
-  assert.equal(estimateFps(1, 30), 30)
-  assert.equal(estimateFps(0.5005, 15), 29.97)
-  assert.equal(estimateFps(1, 25), 25)
-  assert.equal(estimateFps(0, 3), null)
-})
-
 test('names snapshots after the file', () => {
   assert.equal(baseName('/a/b/clip.final.mp4'), 'clip.final')
   assert.equal(baseName('video'), 'video')
@@ -97,30 +96,116 @@ test('maps keys to player actions and leaves modified keys to Orca', () => {
   assert.equal(actionForKey({ key: 'q' }), null)
 })
 
+test('has no full-screen shortcut: Orca denies full screen to plugin frames', () => {
+  assert.equal(actionForKey({ key: 'f' }), null)
+  assert.equal(actionForKey({ key: 'F' }), null)
+  assert.equal(actionForKey({ key: 'а', code: 'KeyF' }), null)
+  assert.equal('fullscreen' in stringsFor('en'), false)
+})
+
+test('letter shortcuts follow the physical key on a Russian layout', () => {
+  const ru = (key: string, code: string, shiftKey = false) => actionForKey({ key, code, shiftKey })
+  assert.deepEqual(ru('л', 'KeyK'), { kind: 'toggle-play' })
+  assert.deepEqual(ru('о', 'KeyJ'), { kind: 'seek', delta: -10 })
+  assert.deepEqual(ru('д', 'KeyL'), { kind: 'seek', delta: 10 })
+  assert.deepEqual(ru('ь', 'KeyM'), { kind: 'mute' })
+  assert.deepEqual(ru('к', 'KeyR'), { kind: 'loop' })
+  assert.deepEqual(ru('ш', 'KeyI'), { kind: 'info' })
+  assert.deepEqual(ru('ы', 'KeyS'), { kind: 'snapshot' })
+  assert.deepEqual(ru('я', 'KeyZ'), { kind: 'fit' })
+  assert.deepEqual(ru('б', 'Comma'), { kind: 'frame', direction: -1 })
+  assert.deepEqual(ru('ю', 'Period'), { kind: 'frame', direction: 1 })
+  assert.deepEqual(ru('Б', 'Comma', true), { kind: 'rate', direction: -1 })
+  assert.deepEqual(ru('Ю', 'Period', true), { kind: 'rate', direction: 1 })
+  assert.deepEqual(ru('Л', 'KeyK', true), { kind: 'toggle-play' })
+  // AZERTY types & on the 1 key; with Shift it types 1, which matches directly.
+  assert.deepEqual(actionForKey({ key: '&', code: 'Digit1' }), { kind: 'seek-fraction', fraction: 0.1 })
+  assert.deepEqual(actionForKey({ key: '0', code: 'Digit0', shiftKey: true }), { kind: 'seek-fraction', fraction: 0 })
+  assert.equal(actionForKey({ key: '!', code: 'Digit1', shiftKey: true }), null)
+  // A Latin letter keeps its meaning (Dvorak types o on the S key), and Cmd/Ctrl stay Orca's.
+  assert.equal(actionForKey({ key: 'o', code: 'KeyS' }), null)
+  assert.equal(actionForKey({ key: 'ы', code: 'KeyS', metaKey: true }), null)
+  assert.equal(actionForKey({ key: 'Dead', code: 'KeyM' }), null)
+})
+
 test('picks Russian strings for ru locales', () => {
   assert.equal(stringsFor('ru-RU').audio, 'Аудио')
   assert.equal(stringsFor('en-US').audio, 'Audio')
   assert.equal(stringsFor(undefined).audio, 'Audio')
+  const en = stringsFor('en') as Record<string, unknown>
+  const ru = stringsFor('ru') as Record<string, unknown>
+  assert.deepEqual(Object.keys(ru).sort(), Object.keys(en).sort())
+  for (const key of Object.keys(en)) {
+    if (typeof en[key] === 'string' && key !== 'seekBadge') assert.ok(en[key] !== ru[key], `ru.${key} is translated`)
+  }
+})
+
+test('writes sizes, speeds and seek badges in the UI language', () => {
+  const ru = stringsFor('ru')
+  assert.equal(plain(formatBytes(1992294, ru.sizeUnits, 'ru')), '1,9 МБ')
+  assert.equal(plain(formatBytes(288768, ru.sizeUnits, 'ru')), '282 КБ')
+  assert.equal(plain(formatBytes(512, ru.sizeUnits, 'ru')), '512 Б')
+  assert.equal(formatBytes(1992294, stringsFor('en').sizeUnits, 'en'), '1.9 MB')
+  assert.equal(formatBytes(1000), '1000 B')
+  assert.equal(formatRate(0.25, 'ru'), '0,25×')
+  assert.equal(formatRate(1.5, 'en'), '1.5×')
+  assert.equal(plain(formatPercentOf(0.5, 'ru')), '50 %')
+  assert.equal(formatPercentOf(0.5, 'en'), '50%')
+  assert.equal(plain(ru.seekBadge.replace('{n}', '+5')), '+5 с')
+  assert.equal(stringsFor('en').seekBadge.replace('{n}', '−10'), '−10s')
+  assert.equal(formatRate(2, 'not a locale!'), '2×')
+})
+
+test('knows Orca’s size limit per type: 50 MiB without a native viewer, 64 MiB with one', () => {
+  for (const type of DEFAULT_TYPES) assert.equal(editorLimitBytes(type), 50 * 1024 * 1024, type)
+  for (const type of OPTION_TYPES) assert.equal(editorLimitBytes(type), 64 * 1024 * 1024, type)
+  assert.equal(editorLimitBytes('.MP4'), 64 * 1024 * 1024)
+})
+
+test('the decode error no longer says AVI does not play, and names the sound codecs', () => {
+  const en = stringsFor('en').errorDecode
+  const ru = stringsFor('ru').errorDecode
+  assert.ok(!en.includes('and AVI do not play'))
+  assert.ok(en.includes('MPEG-2 or DivX outside AVI'))
+  assert.ok(en.includes('AC3, E-AC3, DTS and TrueHD sound does not play'))
+  assert.ok(!ru.includes('DivX и AVI не'))
+  assert.ok(ru.includes('AC3, E-AC3, DTS и TrueHD'))
 })
 
 test('lists file info without a made-up file name', () => {
   const s = stringsFor('en')
-  const facts = { size: 11196490, width: 1280, height: 720, duration: 60, fps: 24, type: '.avi' }
-  assert.deepEqual(infoRows(facts, s), [
+  const facts = { size: 11196490, picture: true, width: 1280, height: 720, duration: 60, fps: 23.976, type: '.avi' }
+  assert.deepEqual(infoRows(facts, s, 'en'), [
     ['Size', '10.7 MB'],
     ['Resolution', '1280 × 720'],
     ['Duration', '1:00'],
-    ['Frame rate', '24'],
+    ['Frame rate', '23.976'],
     ['Type', '.avi']
   ])
   // Orca never sends the file name, so no row may claim one.
   assert.ok(infoRows(facts, s).every(([label, value]) => label !== 'File' && !value.startsWith('media.')))
-  assert.deepEqual(infoRows({ size: 512, width: 0, height: 0, duration: Number.NaN, fps: null, type: '' }, s), [
+  assert.deepEqual(infoRows({ size: 512, picture: true, width: 0, height: 0, duration: Number.NaN, fps: null, type: '' }, s), [
     ['Size', '512 B'],
     ['Resolution', 'unknown'],
     ['Duration', '--:--'],
     ['Frame rate', '— (measured during playback)'],
     ['Type', 'unknown']
   ])
-  assert.equal(infoRows(facts, stringsFor('ru'))[0][0], 'Размер')
+  const ru = infoRows(facts, stringsFor('ru'), 'ru')
+  assert.deepEqual(ru.map(([label, value]) => [label, plain(value)]), [
+    ['Размер', '10,7 МБ'],
+    ['Разрешение', '1280 × 720'],
+    ['Длительность', '1:00'],
+    ['Частота кадров', '23,976'],
+    ['Тип', '.avi']
+  ])
+})
+
+test('file info for sound has no resolution or frame rate rows', () => {
+  const s = stringsFor('en')
+  assert.deepEqual(infoRows({ size: 3_500_000, picture: false, width: 0, height: 0, duration: 214, fps: null, type: '.mka' }, s), [
+    ['Size', '3.3 MB'],
+    ['Duration', '3:34'],
+    ['Type', '.mka']
+  ])
 })

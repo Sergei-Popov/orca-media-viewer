@@ -54,7 +54,6 @@ button, select, input { font: inherit; color: inherit; }
 
 /* The player: a stage that holds the video and its overlays, and a control bar under it. */
 .vv-player { display: flex; flex-direction: column; height: 100%; min-height: 0; background: var(--bg); }
-.vv-player:fullscreen { background: var(--stage); }
 .vv-stage {
   position: relative; flex: 1; min-height: 0; overflow: hidden;
   background: var(--stage); display: flex; align-items: center; justify-content: center;
@@ -102,7 +101,6 @@ button, select, input { font: inherit; color: inherit; }
   flex: none; display: flex; flex-direction: column; gap: 4px; padding: 6px 10px 8px;
   border-top: 1px solid var(--border); background: var(--card);
 }
-.vv-player:fullscreen .vv-bar { border-top-color: transparent; }
 .vv-seek-row { display: flex; align-items: center; gap: 8px; }
 .vv-time { font: 11px var(--mono-font); color: var(--muted-fg); white-space: nowrap; min-width: 0; }
 .vv-controls { display: flex; align-items: center; gap: 2px; min-width: 0; }
@@ -167,6 +165,15 @@ button, select, input { font: inherit; color: inherit; }
   opacity: 0; pointer-events: none; transition: opacity 0.3s ease; white-space: nowrap;
 }
 .vv-toast.show { opacity: 1; transition: none; }
+/* A lasting note over the picture: sound dropped, or a picture that does not play (centred). */
+.vv-notice {
+  position: absolute; top: 10px; left: 50%; transform: translateX(-50%); display: none;
+  max-width: calc(100% - 24px); padding: 6px 12px; border-radius: var(--radius);
+  background: rgba(10, 10, 10, 0.78); color: #f5f5f5; font: 12px/1.5 var(--ui-font);
+  text-align: center; pointer-events: none;
+}
+.vv-notice.show { display: block; }
+.vv-stage.no-picture .vv-notice { top: 50%; transform: translate(-50%, -50%); font-size: 13px; }
 .vv-hidden { display: none !important; }
 `
 
