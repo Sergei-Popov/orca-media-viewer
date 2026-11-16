@@ -193,25 +193,6 @@ export function seekTarget(current: number, delta: number, duration: number): nu
   return Number.isFinite(duration) && duration > 0 ? clamp(next, 0, duration) : Math.max(0, next)
 }
 
-/**
- * Seconds kept clear of the end of a file whose duration the player had to find (a Matroska or
- * WebM file that declares none): Chromium can stall for good on a seek into its last second.
- */
-export const PROBED_END_MARGIN = 1
-
-/**
- * The latest time a seek may reach: the duration, or a second before it when the file declared
- * no duration (`probed`). A probed file no longer than that second is not held back.
- */
-export function seekLimit(duration: number, probed: boolean): number {
-  return probed && Number.isFinite(duration) && duration > PROBED_END_MARGIN ? duration - PROBED_END_MARGIN : duration
-}
-
-/** Where `End` goes: just before the last frame, but not past seekLimit. */
-export function endTarget(duration: number, probed: boolean): number {
-  return Math.min(Math.max(0, duration - 0.05), seekLimit(duration, probed))
-}
-
 /** The base name of a file without its suffix, for snapshot names: `a/b/clip.mp4` → `clip`. */
 export function baseName(name: string): string {
   const leaf = name.split(/[\\/]/).pop() ?? name

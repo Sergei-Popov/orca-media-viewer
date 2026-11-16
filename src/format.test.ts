@@ -6,7 +6,6 @@ import {
   actionForKey,
   baseName,
   editorLimitBytes,
-  endTarget,
   extensionOf,
   formatBytes,
   formatPercentOf,
@@ -16,7 +15,6 @@ import {
   isAudioType,
   normalizeType,
   mimeFor,
-  seekLimit,
   seekTarget,
   stepRate,
   timestampForFile
@@ -79,23 +77,6 @@ test('keeps seeks inside the clip', () => {
   assert.equal(seekTarget(2, -5, 30), 0)
   assert.equal(seekTarget(28, 5, 30), 30)
   assert.equal(seekTarget(10, 5, Number.NaN), 15)
-})
-
-test('keeps End and seeks a second before the end of a file whose duration was probed', () => {
-  // A piped MKV declares no duration; the player finds 19.992 s. Chromium can hang on a seek into
-  // its last second, so End, jumps, 0–9 and the slider stop at 18.992 s.
-  assert.equal(seekLimit(20, true), 19)
-  assert.equal(seekLimit(12.5, true), 11.5)
-  assert.equal(endTarget(20, true), 19)
-  assert.equal(seekTarget(18.5, 5, seekLimit(20, true)), 19)
-  // Files that declare a duration seek to the end as before.
-  assert.equal(seekLimit(20, false), 20)
-  assert.equal(endTarget(20, false), 19.95)
-  assert.equal(seekTarget(18.5, 5, seekLimit(20, false)), 20)
-  // A probed file of a second or less is not held back; an unknown duration stays unknown.
-  assert.equal(seekLimit(0.8, true), 0.8)
-  assert.ok(Number.isNaN(seekLimit(Number.NaN, true)))
-  assert.equal(seekLimit(Number.POSITIVE_INFINITY, true), Number.POSITIVE_INFINITY)
 })
 
 test('names snapshots after the file', () => {
