@@ -21,7 +21,10 @@ export type Track = {
 export type MediaProbe = {
   /** The container's tracks; empty when the header could not be read. */
   tracks: Track[]
-  /** False when the header was read and has no video track; undefined when it is not known. */
+  /**
+   * False when the header was read and has no video track; undefined when it is not known: no
+   * track was found, or the read stopped at one of the reader's limits (a crafted or damaged file).
+   */
   hasVideo?: boolean
   /** The first video track's codec, named for people (`MPEG-2`, `HEVC (H.265)`), when known. */
   videoCodec?: string
@@ -45,35 +48,41 @@ export const MP4_BOX_LIMIT = 10_000
 /** MP4 boxes visited at most in one read, so nesting cannot multiply MP4_BOX_LIMIT; real files need hundreds. */
 export const MP4_BOX_TOTAL_LIMIT = 100_000
 
+/** The tracks a reader found, and whether it stopped at one of its limits before the header's end. */
+type HeaderRead = { tracks: Track[]; truncated: boolean }
+
 /** The header of a file of this type (`mkv`, `mp4`, `avi` …); an empty probe for other types. */
 export function probeMedia(bytes: Uint8Array, fileType: string): MediaProbe {
-  let tracks: Track[]
+  let read: HeaderRead
   switch (fileType) {
     case 'mkv':
     case 'mka':
     case 'webm':
     case 'weba':
-      tracks = readMatroskaTracks(bytes)
+      read = readMatroska(bytes)
       break
     case 'mp4':
     case 'm4v':
     case 'mov':
     case 'm4a':
-      tracks = readMp4Tracks(bytes)
+      read = readMp4(bytes)
       break
     case 'avi':
-      tracks = readAviStreams(bytes)
+      read = { tracks: readAviStreams(bytes), truncated: false }
       break
     default:
-      tracks = []
+      read = { tracks: [], truncated: false }
   }
-  return summarize(tracks)
+  return summarize(read.tracks, read.truncated)
 }
 
-/** The probe's summary of a track list. */
-export function summarize(tracks: Track[]): MediaProbe {
+/**
+ * The probe's summary of a track list. With no track, or a read cut short at a limit, the file's
+ * video and sound are unknown: no notice is drawn from them.
+ */
+export function summarize(tracks: Track[], truncated = false): MediaProbe {
   const probe: MediaProbe = { tracks }
-  if (tracks.length === 0) {
+  if (tracks.length === 0 || truncated) {
     return probe
   }
   const video = tracks.find((track) => track.kind === 'video')
@@ -195,14 +204,19 @@ function* children(bytes: Uint8Array, start: number, end: number): Generator<Ele
 
 /** The tracks of a Matroska or WebM file, read from its first few MiB. */
 export function readMatroskaTracks(bytes: Uint8Array): Track[] {
+  return readMatroska(bytes).tracks
+}
+
+function readMatroska(bytes: Uint8Array): HeaderRead {
+  const none: HeaderRead = { tracks: [], truncated: false }
   const limit = Math.min(bytes.length, MATROSKA_HEADER_LIMIT)
   const header = readElement(bytes, 0, limit)
   if (!header || header.id !== EBML) {
-    return []
+    return none
   }
   const segment = readElement(bytes, header.next, limit)
   if (!segment || segment.id !== SEGMENT) {
-    return []
+    return none
   }
   for (const child of children(bytes, segment.start, segment.end)) {
     if (child.id === CLUSTER) {
@@ -210,16 +224,21 @@ export function readMatroskaTracks(bytes: Uint8Array): Track[] {
     }
     if (child.id === TRACKS) {
       const tracks: Track[] = []
+      // Tracks that run past MATROSKA_HEADER_LIMIT (or the end of the bytes) are read only in part.
+      let truncated = !child.unknownSize && child.next > limit
       for (const entry of children(bytes, child.start, child.end)) {
         if (entry.id === TRACK_ENTRY) {
           tracks.push(readTrackEntry(bytes, entry))
-          if (tracks.length >= MATROSKA_TRACK_LIMIT) break
+          if (tracks.length >= MATROSKA_TRACK_LIMIT) {
+            truncated = true
+            break
+          }
         }
       }
-      return tracks
+      return { tracks, truncated }
     }
   }
-  return []
+  return none
 }
 
 function readTrackEntry(bytes: Uint8Array, entry: Element): Track {
@@ -269,8 +288,8 @@ function readTrackEntry(bytes: Uint8Array, entry: Element): Track {
 // MP4 / QuickTime
 
 type Box = { type: string; start: number; end: number }
-/** How many more boxes one read of a file may visit (MP4_BOX_TOTAL_LIMIT). */
-type Budget = { left: number }
+/** How many more boxes one read of a file may visit (MP4_BOX_TOTAL_LIMIT), and whether a limit stopped it. */
+type Budget = { left: number; stopped: boolean }
 
 function u32(bytes: Uint8Array, pos: number): number {
   return ((bytes[pos] << 24) >>> 0) + (bytes[pos + 1] << 16) + (bytes[pos + 2] << 8) + bytes[pos + 3]
@@ -286,7 +305,8 @@ function fourcc(bytes: Uint8Array, pos: number): string {
  */
 function* boxes(bytes: Uint8Array, start: number, end: number, budget: Budget): Generator<Box> {
   let pos = start
-  for (let visited = 0; pos + 8 <= end && visited < MP4_BOX_LIMIT && budget.left > 0; visited += 1) {
+  let visited = 0
+  for (; pos + 8 <= end && visited < MP4_BOX_LIMIT && budget.left > 0; visited += 1) {
     budget.left -= 1
     let size = u32(bytes, pos)
     let header = 8
@@ -303,6 +323,10 @@ function* boxes(bytes: Uint8Array, start: number, end: number, budget: Budget): 
     yield { type: fourcc(bytes, pos + 4), start: pos + header, end: pos + size }
     pos += size
   }
+  // Out of the loop with boxes left: MP4_BOX_LIMIT or the read's budget stopped it.
+  if (pos + 8 <= end) {
+    budget.stopped = true
+  }
 }
 
 function child(bytes: Uint8Array, parent: Box, type: string, budget: Budget): Box | null {
@@ -314,7 +338,11 @@ function child(bytes: Uint8Array, parent: Box, type: string, budget: Budget): Bo
 
 /** The tracks of an MP4 or QuickTime file, wherever its `moov` box is. */
 export function readMp4Tracks(bytes: Uint8Array): Track[] {
-  const budget: Budget = { left: MP4_BOX_TOTAL_LIMIT }
+  return readMp4(bytes).tracks
+}
+
+function readMp4(bytes: Uint8Array): HeaderRead {
+  const budget: Budget = { left: MP4_BOX_TOTAL_LIMIT, stopped: false }
   let moov: Box | null = null
   for (const box of boxes(bytes, 0, bytes.length, budget)) {
     if (box.type === 'moov') {
@@ -323,7 +351,7 @@ export function readMp4Tracks(bytes: Uint8Array): Track[] {
     }
   }
   if (!moov) {
-    return []
+    return { tracks: [], truncated: budget.stopped }
   }
   const tracks: Track[] = []
   for (const trak of boxes(bytes, moov.start, moov.end, budget)) {
@@ -349,7 +377,7 @@ export function readMp4Tracks(bytes: Uint8Array): Track[] {
     }
     tracks.push(track)
   }
-  return tracks
+  return { tracks, truncated: budget.stopped }
 }
 
 /** Seconds per sample from the sample table: the delta that covers the most samples. */

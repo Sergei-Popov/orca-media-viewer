@@ -12,6 +12,7 @@ import {
   formatTime,
   infoRows,
   seekTarget,
+  stageWithoutPicture,
   stepRate,
   timestampForFile,
   type KeyAction
@@ -298,12 +299,12 @@ export class Player {
     }
     const v = this.video
     if (!v.videoWidth) {
-      if (source.audio || source.hasVideoTrack === false) {
-        this.setAudio(true)
-      } else {
+      if (stageWithoutPicture(source.audio === true, source.hasVideoTrack) === 'no-picture') {
         // A video file whose picture Chromium cannot decode, while its sound plays: say so
         // instead of passing it off as an audio file.
         this.setNoPicture(source.videoCodec)
+      } else {
+        this.setAudio(true)
       }
     } else if (source.droppedSound) {
       this.showNotice(this.s.soundDropped.replace('{codec}', source.droppedSound))

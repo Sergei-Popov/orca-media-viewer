@@ -61,6 +61,15 @@ export function isAudioType(fileType: string | undefined): boolean {
 }
 
 /**
+ * What the stage shows when Chromium decodes no picture: the notice that the video codec does not
+ * play only when the header showed a video track; the audio cover for an audio file, a file with
+ * no video track, or a header that was not read to its end.
+ */
+export function stageWithoutPicture(audioFile: boolean, hasVideoTrack: boolean | undefined): 'cover' | 'no-picture' {
+  return !audioFile && hasVideoTrack === true ? 'no-picture' : 'cover'
+}
+
+/**
  * A MIME type for a Blob of this file type. Chromium sniffs the container anyway, so this is a
  * hint: QuickTime files are ISO BMFF and play as `video/mp4`, Matroska through the WebM demuxer.
  */
