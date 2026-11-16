@@ -98,6 +98,9 @@ orca plugin shot local.media-viewer --editor path/to/clip.mkv   # PNG of the edi
   `vendor/ffmpeg/avi-decoder.{mjs,wasm}` in Docker (`emscripten/emsdk:3.1.74`), see
   `vendor/ffmpeg/BUILD-INFO`.
 - `vendor/mp4-muxer/` — [mp4-muxer](https://github.com/Vanilagy/mp4-muxer) 5.2.1 (MIT).
+- `tools/` — the listing images: `make-listing-samples.sh` renders a demo clip
+  (`make-listing-clip.py`) into `.orca/listing/samples/`, `listing.json` is the spec for the hub's
+  `scripts/listing-image.sh`, `rasterize-icons.sh` turns `images/icon.svg` into the icon.
 
 Branches follow git-flow: `feature/*` from `develop`, releases through `release/x.y.z` into
 `main`, tagged `vX.Y.Z`. Only the maintainers push and open pull requests.

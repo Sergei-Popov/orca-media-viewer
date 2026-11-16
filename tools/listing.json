@@ -1,0 +1,150 @@
+{
+  "accent": "#D946EF",
+  "title": [
+    "Media",
+    "Viewer"
+  ],
+  "icon": "images/icon.png",
+  "budget": {
+    "imageKB": 490,
+    "totalKB": 2330,
+    "reason": "Every image shows a full-width 1280×720 rendered video frame, about 300 KB losslessly; palette PNGs would band the frame."
+  },
+  "cover": {
+    "out": "images/cover.png",
+    "alt": "A clip paused at 0:06 of 0:12 in Media Viewer, above the seek bar, frame steps, volume, speed, repeat, snapshot and info.",
+    "tagline": "Play .mkv and .avi in Orca tabs, frame by frame.",
+    "chips": [
+      ".mkv",
+      ".avi",
+      ".mka",
+      "Frame step",
+      "Snapshot"
+    ],
+    "chipMain": 0,
+    "stage": {
+      "file": ".orca/listing/samples/sunset-orbit.mkv",
+      "theme": "dark",
+      "scale": 2,
+      "width": 440,
+      "height": 440,
+      "waitFor": {
+        "text": "/ 0:12"
+      },
+      "act": [
+        {
+          "key": "5"
+        },
+        {
+          "key": "."
+        },
+        {
+          "key": "."
+        }
+      ],
+      "origin": {
+        "x": 0,
+        "y": 0
+      }
+    }
+  },
+  "screenshots": [
+    {
+      "out": "images/shot-1-avi.png",
+      "headline": "AVI plays too, converted in the tab",
+      "alt": "An .avi converted to MP4 in the tab, offline, paused at 0:02; File info: 9.2 MB, 1280 × 720, 1:00, frame rate 24, .avi.",
+      "stage": {
+        "file": ".orca/listing/samples/sunset-orbit.avi",
+        "theme": "dark",
+        "waitFor": {
+          "text": "/ 1:00"
+        },
+        "act": [
+          {
+            "key": "Space"
+          },
+          {
+            "wait": 2000
+          },
+          {
+            "key": "Space"
+          },
+          {
+            "key": "i"
+          }
+        ]
+      }
+    },
+    {
+      "out": "images/shot-2-frame-step.png",
+      "headline": "Step frame by frame, at any speed",
+      "alt": "Speed set to 0.5× and the clip paused at 0:04; the two buttons beside Play step it one frame back or forward.",
+      "stage": {
+        "file": ".orca/listing/samples/sunset-orbit.mkv",
+        "theme": "dark",
+        "waitFor": {
+          "text": "/ 0:12"
+        },
+        "act": [
+          {
+            "key": "4"
+          },
+          {
+            "select": "Speed (< >)",
+            "option": "0.5×"
+          },
+          {
+            "wait": 1200
+          },
+          {
+            "click": [
+              500,
+              516
+            ]
+          },
+          {
+            "key": "."
+          }
+        ]
+      }
+    },
+    {
+      "out": "images/shot-3-snapshot.png",
+      "headline": "Save the frame you need as PNG",
+      "alt": "The camera button (S) saves the paused frame at 0:08 as a PNG file you name, and the player confirms: Frame saved.",
+      "stage": {
+        "file": ".orca/listing/samples/sunset-orbit.mkv",
+        "theme": "dark",
+        "waitFor": {
+          "text": "/ 0:12"
+        },
+        "act": [
+          {
+            "key": "7"
+          },
+          {
+            "key": "s"
+          }
+        ]
+      }
+    },
+    {
+      "out": "images/shot-4-mp4.png",
+      "headline": "Full controls for .mp4 and .mov too",
+      "alt": "Open .mp4, .mov or .webm in Media Player for speed, frame steps and snapshots, at 0:11 of 0:12. Shown in Orca's light theme.",
+      "stage": {
+        "file": ".orca/listing/samples/sunset-orbit.mp4",
+        "theme": "light",
+        "editor": "media-plus",
+        "waitFor": {
+          "text": "/ 0:12"
+        },
+        "act": [
+          {
+            "key": "End"
+          }
+        ]
+      }
+    }
+  ]
+}
