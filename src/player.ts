@@ -7,9 +7,9 @@ import {
   baseName,
   clamp,
   estimateFps,
-  formatBytes,
   formatRate,
   formatTime,
+  infoRows,
   seekTarget,
   stepRate,
   timestampForFile,
@@ -646,15 +646,17 @@ export class Player {
       return
     }
     const v = this.video
-    const s = this.s
-    const rows: Array<[string, string]> = [
-      [s.infoName, this.source.name],
-      [s.infoSize, formatBytes(this.source.size)],
-      [s.infoResolution, v.videoWidth ? `${v.videoWidth} × ${v.videoHeight}` : s.unknown],
-      [s.infoDuration, formatTime(v.duration)],
-      [s.infoFps, this.fpsMeasured ? `${this.fps}` : `— (${s.infoFpsPending})`],
-      [s.infoType, this.source.type || s.unknown]
-    ]
+    const rows = infoRows(
+      {
+        size: this.source.size,
+        width: v.videoWidth,
+        height: v.videoHeight,
+        duration: v.duration,
+        fps: this.fpsMeasured ? this.fps : null,
+        type: this.source.type
+      },
+      this.s
+    )
     this.info.replaceChildren(
       ...rows.flatMap(([label, value]) => {
         const dt = el('dt')
