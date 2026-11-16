@@ -1,5 +1,15 @@
 import { assert, test } from 'orca/testing'
-import { probeMedia, readAviStreams, readMatroskaTracks, readMp4Tracks, soundFormatName, videoCodecName } from './container'
+import {
+  MATROSKA_TRACK_LIMIT,
+  MP4_BOX_LIMIT,
+  MP4_BOX_TOTAL_LIMIT,
+  probeMedia,
+  readAviStreams,
+  readMatroskaTracks,
+  readMp4Tracks,
+  soundFormatName,
+  videoCodecName
+} from './container'
 
 // Test files are built here byte by byte, so the repository holds no media blobs.
 
@@ -92,6 +102,25 @@ test('returns nothing, without throwing, for damaged or foreign headers', () => 
   assert.equal(probeMedia(new Uint8Array(0), 'mkv').hasVideo, undefined)
 })
 
+test('reads at most 128 Matroska TrackEntries', () => {
+  assert.equal(MATROSKA_TRACK_LIMIT, 128)
+  const many = matroska([videoTrack('V_VP9', 33_333_333), ...Array.from({ length: 199 }, () => audioTrack('A_OPUS'))])
+  const tracks = readMatroskaTracks(many)
+  assert.equal(tracks.length, 128)
+  assert.equal(tracks[0].codec, 'V_VP9')
+  // A crafted file: unknown-size Segment and Tracks, then 4 MiB of empty TrackEntries (AE 80).
+  const head = [...ebml([0x1a, 0x45, 0xdf, 0xa3], text([0x42, 0x82], 'matroska'))]
+  const unknown = [0x01, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]
+  const lead = [...head, 0x18, 0x53, 0x80, 0x67, ...unknown, 0x16, 0x54, 0xae, 0x6b, ...unknown]
+  const crafted = new Uint8Array(4 * 1024 * 1024)
+  crafted.set(lead)
+  for (let i = lead.length; i + 1 < crafted.length; i += 2) {
+    crafted[i] = 0xae
+    crafted[i + 1] = 0x80
+  }
+  assert.equal(readMatroskaTracks(crafted).length, 128)
+})
+
 // --- MP4 ----------------------------------------------------------------------------------------
 
 function box(type: string, payload: number[]): number[] {
@@ -138,6 +167,35 @@ test('judges only the enabled MP4 sound track: Chromium plays that one', () => {
   assert.equal(probeMedia(mp4(video, mp4Track('soun', 'ac-3', 48000, 1536, 3), mp4Track('soun', 'mp4a', 48000, 1024, 3)), 'mp4').droppedSound, undefined)
   assert.equal(probeMedia(mp4(video, mp4Track('soun', 'ac-3', 48000, 1536, 2), mp4Track('soun', 'mp4a', 48000, 1024, 2)), 'mp4').droppedSound, undefined)
   assert.equal(probeMedia(mp4(video, mp4Track('soun', 'ac-3', 48000, 1536, 2)), 'mp4').droppedSound, 'AC3')
+})
+
+test('visits at most 10,000 MP4 boxes per level', () => {
+  assert.equal(MP4_BOX_LIMIT, 10_000)
+  const free = box('free', [])
+  const moov = box('moov', mp4Track('vide', 'avc1', 25, 1))
+  const after = (count: number, last: number[]) => {
+    const file = new Uint8Array(count * free.length + last.length)
+    for (let i = 0; i < count; i += 1) file.set(free, i * free.length)
+    file.set(last, count * free.length)
+    return file
+  }
+  // Top level: the moov box is the 10,000th box, then the 10,001st.
+  assert.equal(readMp4Tracks(after(MP4_BOX_LIMIT - 1, moov)).length, 1)
+  assert.equal(readMp4Tracks(after(MP4_BOX_LIMIT, moov)).length, 0)
+  // Inside moov: the trak after 9,999 and after 10,000 other boxes.
+  const inMoov = (count: number) => box('moov', [...Array.from(after(count, mp4Track('vide', 'avc1', 25, 1)))])
+  assert.equal(readMp4Tracks(new Uint8Array(inMoov(MP4_BOX_LIMIT - 1))).length, 1)
+  assert.equal(readMp4Tracks(new Uint8Array(inMoov(MP4_BOX_LIMIT))).length, 0)
+  // Nesting cannot multiply the cap: 150 traks of 900 empty boxes each stop at 100,000 boxes in all.
+  assert.equal(MP4_BOX_TOTAL_LIMIT, 100_000)
+  const padded = box('trak', [...Array.from(after(900, [])), ...mp4Track('soun', 'mp4a', 48000, 1024).slice(8)])
+  const nested = readMp4Tracks(new Uint8Array(box('moov', Array.from({ length: 150 }, () => padded).flat())))
+  assert.ok(nested.length > 0 && nested.length < 150, `${nested.length} of 150 traks read`)
+  // 64 MiB of empty boxes and no moov: nothing, after 10,000 boxes.
+  const crafted = new Uint8Array(64 * 1024 * 1024)
+  crafted.set(free)
+  for (let filled = free.length; filled < crafted.length; filled *= 2) crafted.copyWithin(filled, 0, filled)
+  assert.deepEqual(readMp4Tracks(crafted), [])
 })
 
 // --- AVI ----------------------------------------------------------------------------------------
