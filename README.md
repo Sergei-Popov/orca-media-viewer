@@ -93,8 +93,10 @@ Convert such files with `ffmpeg -i in.avi -c:v libx264 -c:a aac out.mp4`. Orca's
 - **Frame steps** use the frame duration the container declares (Matroska, WebM, MP4, MOV) or the
   AVI decoder's rate. A file that declares none, such as some browser recordings, steps at 30 fps
   until a second of playback at 1× has measured its rate.
-- **Files without a duration** (MediaRecorder WebM, unfinished recordings): the player seeks to
-  the end once when the file opens, so Chromium reads the whole file to find the duration.
+- **Files without a duration** (MediaRecorder WebM, piped or unfinished recordings): the player
+  seeks to the end once when the file opens, so Chromium reads the whole file to find the
+  duration. `End`, jumps, frame steps and the seek bar then stop a second before the end: Chromium
+  can stall for good on a seek into the last second of such a file.
 
 ## Install
 

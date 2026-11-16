@@ -6,11 +6,13 @@ import {
   actionForKey,
   baseName,
   clamp,
+  endTarget,
   formatNumber,
   formatPercentOf,
   formatRate,
   formatTime,
   infoRows,
+  seekLimit,
   seekTarget,
   stepRate,
   timestampForFile,
@@ -158,6 +160,8 @@ export class Player {
   /** Media time of the frame on screen, from requestVideoFrameCallback. */
   private shownTime: number | null = null
   private pendingStep: PendingStep | null = null
+  /** The file declared no duration and the player found it (findDuration): seeks stop short of the end. */
+  private durationProbed = false
   private seeking = false
   private actualSize = false
   private timers = new Map<string, number>()
@@ -245,6 +249,7 @@ export class Player {
     this.measuredFps = null
     this.shownTime = null
     this.pendingStep = null
+    this.durationProbed = false
     this.hideMessage()
     this.hideNotice()
     this.stage.classList.remove('empty')
@@ -273,12 +278,13 @@ export class Player {
     } else if (source.droppedSound) {
       this.showNotice(this.s.soundDropped.replace('{codec}', source.droppedSound))
     }
+    this.durationProbed = v.duration === Number.POSITIVE_INFINITY
     await this.findDuration()
     if (this.source !== source) {
       return
     }
     if (resumeAt > 0) {
-      v.currentTime = Math.min(resumeAt, this.mediaDuration() || resumeAt)
+      v.currentTime = this.clampSeek(resumeAt)
     }
     this.applyRate()
     if (resumePlaying) {
@@ -326,6 +332,17 @@ export class Player {
     const ranges = v.seekable
     const end = ranges.length > 0 ? ranges.end(ranges.length - 1) : Number.NaN
     return Number.isFinite(end) && end > 0 ? end : Number.NaN
+  }
+
+  /** The latest time a seek may reach (seekLimit); NaN or Infinity while the duration is unknown. */
+  private seekLimit(): number {
+    return seekLimit(this.mediaDuration(), this.durationProbed)
+  }
+
+  /** `time`, held at or before seekLimit when the duration is known. */
+  private clampSeek(time: number): number {
+    const limit = this.seekLimit()
+    return Number.isFinite(limit) ? Math.min(time, limit) : time
   }
 
   /** Shows a centred message over an empty stage, e.g. while the file loads or when it is text. */
@@ -397,7 +414,7 @@ export class Player {
       case 'seek-fraction': {
         const duration = this.mediaDuration()
         if (Number.isFinite(duration)) {
-          v.currentTime = duration * action.fraction
+          v.currentTime = this.clampSeek(duration * action.fraction)
         }
         break
       }
@@ -407,7 +424,7 @@ export class Player {
       case 'seek-end': {
         const duration = this.mediaDuration()
         if (Number.isFinite(duration)) {
-          v.currentTime = Math.max(0, duration - 0.05)
+          v.currentTime = endTarget(duration, this.durationProbed)
         }
         break
       }
@@ -468,7 +485,7 @@ export class Player {
 
     on(this.seek, 'input', () => {
       this.seeking = true
-      v.currentTime = Number(this.seek.value)
+      v.currentTime = this.clampSeek(Number(this.seek.value))
       this.renderTime()
     })
     on(this.seek, 'change', () => {
@@ -569,7 +586,7 @@ export class Player {
 
   private seekBy(delta: number): void {
     const v = this.video
-    v.currentTime = seekTarget(v.currentTime, delta, this.mediaDuration())
+    v.currentTime = seekTarget(v.currentTime, delta, this.seekLimit())
     const amount = `${delta > 0 ? '+' : '−'}${formatNumber(Math.abs(delta), this.options.locale)}`
     this.showBadge(this.s.seekBadge.replace('{n}', amount))
   }
@@ -582,7 +599,7 @@ export class Player {
     v.pause()
     const duration = this.frameDuration()
     const anchor = stepAnchor(v.currentTime, this.shownTime, this.pendingStep, duration)
-    const target = frameStepTarget(anchor, duration, direction, this.mediaDuration())
+    const target = frameStepTarget(anchor, duration, direction, this.seekLimit())
     this.pendingStep = { target, anchor: Math.max(0, anchor + direction * duration) }
     v.currentTime = target
   }
