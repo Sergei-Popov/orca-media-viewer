@@ -84,8 +84,9 @@ Convert such files with `ffmpeg -i in.avi -c:v libx264 -c:a aac out.mp4`. Orca's
 - **AVI colours.** The decoder does not pass on a stream's colour description. SD video (under
   720 lines) in a codec that has none (Xvid, DivX and other MPEG-4 Part 2, DivX 3, H.263, MJPEG,
   MPEG-1, raw) is tagged BT.601; H.264 and MPEG-2, which can have one, and all HD video are tagged
-  BT.709. A file that differs from that rule, such as SD H.264 made for BT.601, plays with
-  slightly shifted colours.
+  BT.709. A file that differs from that rule plays with slightly shifted colours: SD H.264 in AVI
+  without a BT.709 tag (tagged BT.601, or untagged) looks as it did in 0.3.0, because the
+  stream's colour description (the H.264 VUI) is not read.
 - **AVI errors.** The decoder reports one error for "codec not built in" and "stream does not
   open". Media Player calls the file damaged when the codec is one it has (Xvid, DivX, H.264,
   MJPEG …); a damaged header that names some other codec reads as that codec being unsupported.
@@ -94,9 +95,15 @@ Convert such files with `ffmpeg -i in.avi -c:v libx264 -c:a aac out.mp4`. Orca's
 - **Frame steps** use the frame duration the container declares (Matroska, WebM, MP4, MOV) or the
   AVI decoder's rate. A file that declares none, such as some browser recordings, steps at 30 fps
   until a second of playback at 1× has measured its rate.
-- **Files without a duration** (MediaRecorder WebM, piped or unfinished recordings): when the
-  file opens, the player seeks to 1 s, which gives Chromium the duration of a piped MKV, and only
-  when that does not, seeks past the end, so Chromium reads the whole file to find it.
+- **Files without a duration** (MediaRecorder WebM, live or unfinished recordings): when the
+  file opens, the player seeks past the end, so Chromium reads the whole file to find it, then
+  goes back to the start. If Chromium reports an error then, or the video shows no frame within
+  about 2 s, the player opens the file again without that seek and plays it without a duration.
+- **Piped or crashed MKV with H.264** (or HEVC; also MediaRecorder's H.264 WebM and MKV) and no
+  duration plays without a duration or seeking, as in 0.3.0: after a seek Chromium shows no
+  picture of such a file, or fails to decode it, so the player does not look for the duration,
+  and the seek bar, `End` and 0–9 stay off. A seek with the arrow keys can still end in a decode
+  error, as in 0.3.0.
 
 ## Install
 
