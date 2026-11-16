@@ -198,6 +198,36 @@ test('visits at most 10,000 MP4 boxes per level', () => {
   assert.deepEqual(readMp4Tracks(crafted), [])
 })
 
+test('a header with no track, or read only up to a reader limit, leaves video and sound unknown', () => {
+  // Nothing read: no notice may come from it.
+  assert.deepEqual(probeMedia(new Uint8Array(box('ftyp', ascii('isom'))), 'mp4'), { tracks: [] })
+  // AC3 in the first 128 Matroska tracks and AAC after them: the AAC may play, so no sound notice;
+  // a video track after the limit is not known either.
+  const cut = probeMedia(matroska([...Array.from({ length: 128 }, () => audioTrack('A_AC3')), audioTrack('A_AAC'), videoTrack('V_VP9')]), 'mkv')
+  assert.equal(cut.tracks.length, 128)
+  assert.equal(cut.hasVideo, undefined)
+  assert.equal(cut.droppedSound, undefined)
+  // The same tracks under the limit are read to the end: a video file whose AAC plays.
+  const whole = probeMedia(matroska([audioTrack('A_AC3'), audioTrack('A_AAC'), videoTrack('V_VP9')]), 'mkv')
+  assert.equal(whole.hasVideo, true)
+  // An MP4 whose moov has an AC3 trak, then more boxes than one level may hold, then the AAC trak.
+  const free = box('free', [])
+  const padding = new Array<number>(MP4_BOX_LIMIT * free.length)
+  for (let i = 0; i < padding.length; i += 1) padding[i] = free[i % free.length]
+  const moov = (...traks: number[][]) => new Uint8Array(box('moov', traks.flat()))
+  const mp4Cut = probeMedia(moov(mp4Track('soun', 'ac-3', 48000, 1536, 3), padding, mp4Track('soun', 'mp4a', 48000, 1024, 3)), 'mp4')
+  assert.equal(mp4Cut.tracks.length, 1)
+  assert.equal(mp4Cut.hasVideo, undefined)
+  assert.equal(mp4Cut.droppedSound, undefined)
+  // Without the padding, the AC3 alone is enabled: that sound does not play, and there is no video.
+  const mp4Whole = probeMedia(moov(mp4Track('soun', 'ac-3', 48000, 1536, 3)), 'mp4')
+  assert.equal(mp4Whole.hasVideo, false)
+  assert.equal(mp4Whole.droppedSound, 'AC3')
+  // A moov past the top-level limit (the audio-only MP4 of the review): nothing read, nothing claimed.
+  const late = new Uint8Array([...padding, ...box('moov', mp4Track('soun', 'mp4a', 44100, 1024, 3))])
+  assert.deepEqual(probeMedia(late, 'mp4'), { tracks: [] })
+})
+
 // --- AVI ----------------------------------------------------------------------------------------
 
 function chunk(type: string, payload: number[]): number[] {

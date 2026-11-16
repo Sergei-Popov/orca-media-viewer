@@ -12,6 +12,7 @@ import {
   formatTime,
   infoRows,
   seekTarget,
+  stageWithoutPicture,
   stepRate,
   timestampForFile,
   type KeyAction
@@ -42,6 +43,8 @@ export type VideoSource = {
   droppedSound?: string
   /** A sound track in a codec that plays gave no sound (a damaged AVI sound stream): it says so. */
   soundUndecoded?: boolean
+  /** False: never seek to find a missing duration (H.264 or HEVC in Matroska; see duration.ts). */
+  durationProbe?: boolean
 }
 
 export type LoadOptions = {
@@ -163,6 +166,12 @@ export class Player {
   private pendingStep: PendingStep | null = null
   private seeking = false
   private actualSize = false
+  /** Counts the sources opened, so work for an earlier one stops (also a reopen of the same source). */
+  private generation = 0
+  /** The running duration probe: aborted when another source opens. */
+  private probe: AbortController | null = null
+  /** Where the opening source goes once it is ready: an outside change meanwhile keeps it. */
+  private restoring: { at: number; playing: boolean } | null = null
   private timers = new Map<string, number>()
   private disposers: Array<() => void> = []
 
@@ -241,9 +250,27 @@ export class Player {
   /** Plays `source`, replacing the current one. */
   load(source: VideoSource, options: LoadOptions = {}): void {
     const previous = this.source
-    const resumeAt = options.keepPosition && previous ? this.video.currentTime : 0
-    const resumePlaying = options.keepPosition && previous ? !this.video.paused : options.autoplay === true
+    // While the previous source still opens, its playhead is the probe's, not the viewer's: keep
+    // the position it was going back to.
+    const keep =
+      options.keepPosition && previous
+        ? (this.restoring ?? { at: this.video.currentTime, playing: !this.video.paused })
+        : null
+    const resumeAt = keep ? keep.at : 0
+    const resumePlaying = keep ? keep.playing : options.autoplay === true
     this.source = source
+    this.open(source, resumeAt, resumePlaying, true)
+    if (previous && previous.url !== source.url) {
+      URL.revokeObjectURL(previous.url)
+    }
+  }
+
+  /** Points the element at `source`; `probe` false skips the duration probe (the fallback). */
+  private open(source: VideoSource, resumeAt: number, resumePlaying: boolean, probe: boolean): void {
+    const generation = ++this.generation
+    this.probe?.abort()
+    this.probe = null
+    this.restoring = { at: resumeAt, playing: resumePlaying }
     this.meter.reset()
     this.measuredFps = null
     this.shownTime = null
@@ -254,35 +281,55 @@ export class Player {
     this.setAudio(source.audio === true)
     this.video.src = source.url
     this.video.load()
-    if (previous && previous.url !== source.url) {
-      URL.revokeObjectURL(previous.url)
-    }
-    const onReady = () => void this.ready(source, resumeAt, resumePlaying)
+    const onReady = () => void this.ready(source, resumeAt, resumePlaying, probe, generation)
     this.video.addEventListener('loadedmetadata', onReady, { once: true })
-    this.watchFrames()
+    this.watchFrames(generation)
   }
 
   /** The metadata is in: picks picture or cover, finds a missing duration, restores the playhead. */
-  private async ready(source: VideoSource, resumeAt: number, resumePlaying: boolean): Promise<void> {
+  private async ready(
+    source: VideoSource,
+    resumeAt: number,
+    resumePlaying: boolean,
+    probe: boolean,
+    generation: number
+  ): Promise<void> {
+    if (generation !== this.generation) {
+      return
+    }
     const v = this.video
     if (!v.videoWidth) {
-      if (source.audio || source.hasVideoTrack === false) {
-        this.setAudio(true)
-      } else {
+      if (stageWithoutPicture(source.audio === true, source.hasVideoTrack) === 'no-picture') {
         // A video file whose picture Chromium cannot decode, while its sound plays: say so
         // instead of passing it off as an audio file.
         this.setNoPicture(source.videoCodec)
+      } else {
+        this.setAudio(true)
       }
     } else if (source.droppedSound) {
       this.showNotice(this.s.soundDropped.replace('{codec}', source.droppedSound))
     } else if (source.soundUndecoded) {
       this.showNotice(this.s.soundUndecoded)
     }
-    // A recording or a pipe declares no duration: find it before the playhead is restored.
-    await findDuration(v)
-    if (this.source !== source) {
-      return
+    // A recording or a live capture declares no duration: find it before the playhead is restored.
+    if (probe && source.durationProbe !== false && !Number.isFinite(v.duration)) {
+      const controller = new AbortController()
+      this.probe = controller
+      const result = await findDuration(v, {
+        decodedFrames: () => v.getVideoPlaybackQuality?.().totalVideoFrames ?? 0,
+        signal: controller.signal
+      })
+      if (generation !== this.generation) {
+        return
+      }
+      this.probe = null
+      if (result === 'fallback') {
+        // Chromium failed on the probe's seeks: open the file again and play it without a duration.
+        this.open(source, resumeAt, resumePlaying, false)
+        return
+      }
     }
+    this.restoring = null
     if (resumeAt > 0) {
       v.currentTime = Math.min(resumeAt, this.mediaDuration() || resumeAt)
     }
@@ -321,6 +368,10 @@ export class Player {
 
   /** Clears the stage: no source, no message. */
   clear(): void {
+    this.generation += 1
+    this.probe?.abort()
+    this.probe = null
+    this.restoring = null
     if (this.source) {
       URL.revokeObjectURL(this.source.url)
     }
@@ -657,7 +708,7 @@ export class Player {
    * Follows the frames the video presents (requestVideoFrameCallback): the frame on screen for
    * frame steps, and, while it plays at 1×, the frame rate for the info overlay (FrameRateMeter).
    */
-  private watchFrames(): void {
+  private watchFrames(generation: number): void {
     type FrameMeta = { mediaTime: number }
     const v = this.video as HTMLVideoElement & {
       requestVideoFrameCallback?: (cb: (now: number, meta: FrameMeta) => void) => number
@@ -667,7 +718,7 @@ export class Player {
     }
     const source = this.source
     const tick = (_now: number, meta: FrameMeta) => {
-      if (this.source !== source || !source) {
+      if (generation !== this.generation || !source) {
         return
       }
       this.shownTime = meta.mediaTime
@@ -739,7 +790,8 @@ export class Player {
 
   private renderError(): void {
     const error = this.video.error
-    if (!error || !this.source) {
+    // An error during the duration probe opens the file again without it (ready()).
+    if (!error || !this.source || this.probe) {
       return
     }
     const s = this.s

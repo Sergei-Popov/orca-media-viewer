@@ -16,6 +16,7 @@ import {
   normalizeType,
   mimeFor,
   seekTarget,
+  stageWithoutPicture,
   stepRate,
   timestampForFile
 } from './format'
@@ -77,6 +78,15 @@ test('keeps seeks inside the clip', () => {
   assert.equal(seekTarget(2, -5, 30), 0)
   assert.equal(seekTarget(28, 5, 30), 30)
   assert.equal(seekTarget(10, 5, Number.NaN), 15)
+})
+
+test('says a video codec does not play only when the header showed a video track', () => {
+  assert.equal(stageWithoutPicture(false, true), 'no-picture')
+  // No video track, an audio file, or a header that could not be read to its end: the audio cover.
+  assert.equal(stageWithoutPicture(false, false), 'cover')
+  assert.equal(stageWithoutPicture(false, undefined), 'cover')
+  assert.equal(stageWithoutPicture(true, true), 'cover')
+  assert.equal(stageWithoutPicture(true, undefined), 'cover')
 })
 
 test('names snapshots after the file', () => {
