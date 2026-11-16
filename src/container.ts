@@ -13,6 +13,8 @@ export type Track = {
   frameDuration?: number
   width?: number
   height?: number
+  /** MP4/QuickTime: the track header's enabled flag. Chromium plays only an enabled sound track. */
+  enabled?: boolean
 }
 
 /** What the player learns from a file's header before Chromium plays it. */
@@ -25,7 +27,10 @@ export type MediaProbe = {
   videoCodec?: string
   /** Seconds per frame of the first video track, when the container declares it. */
   frameDuration?: number
-  /** A sound codec Chromium does not play, when every sound track of the file is in one. */
+  /**
+   * A sound codec Chromium does not play, when every sound track of the file is in one; in MP4
+   * and QuickTime, every enabled sound track (when the file enables none, every sound track).
+   */
   droppedSound?: string
 }
 
@@ -33,6 +38,12 @@ export type MediaProbe = {
 export const MATROSKA_HEADER_LIMIT = 4 * 1024 * 1024
 /** The AVI header list (hdrl) sits at the start; 1 MiB is far more than any real one needs. */
 export const AVI_HEADER_LIMIT = 1024 * 1024
+/** Matroska TrackEntries read at most: real files have a handful, a crafted one millions. */
+export const MATROSKA_TRACK_LIMIT = 128
+/** MP4 boxes visited at most per level, so a crafted file of tiny boxes is not walked to its end. */
+export const MP4_BOX_LIMIT = 10_000
+/** MP4 boxes visited at most in one read, so nesting cannot multiply MP4_BOX_LIMIT; real files need hundreds. */
+export const MP4_BOX_TOTAL_LIMIT = 100_000
 
 /** The header of a file of this type (`mkv`, `mp4`, `avi` …); an empty probe for other types. */
 export function probeMedia(bytes: Uint8Array, fileType: string): MediaProbe {
@@ -73,7 +84,10 @@ export function summarize(tracks: Track[]): MediaProbe {
       probe.frameDuration = video.frameDuration
     }
   }
-  const audio = tracks.filter((track) => track.kind === 'audio')
+  const sound = tracks.filter((track) => track.kind === 'audio')
+  // Chromium plays the enabled sound track of an MP4, not another one it could decode.
+  const enabled = sound.filter((track) => track.enabled !== false)
+  const audio = enabled.length > 0 ? enabled : sound
   const unplayable = audio.map((track) => unplayableSoundName(track.codec))
   if (audio.length > 0 && unplayable.every((name) => name !== null)) {
     probe.droppedSound = unplayable[0] ?? undefined
@@ -199,6 +213,7 @@ export function readMatroskaTracks(bytes: Uint8Array): Track[] {
       for (const entry of children(bytes, child.start, child.end)) {
         if (entry.id === TRACK_ENTRY) {
           tracks.push(readTrackEntry(bytes, entry))
+          if (tracks.length >= MATROSKA_TRACK_LIMIT) break
         }
       }
       return tracks
@@ -254,6 +269,8 @@ function readTrackEntry(bytes: Uint8Array, entry: Element): Track {
 // MP4 / QuickTime
 
 type Box = { type: string; start: number; end: number }
+/** How many more boxes one read of a file may visit (MP4_BOX_TOTAL_LIMIT). */
+type Budget = { left: number }
 
 function u32(bytes: Uint8Array, pos: number): number {
   return ((bytes[pos] << 24) >>> 0) + (bytes[pos + 1] << 16) + (bytes[pos + 2] << 8) + bytes[pos + 3]
@@ -263,10 +280,14 @@ function fourcc(bytes: Uint8Array, pos: number): string {
   return readAscii(bytes, pos, pos + 4).padEnd(4, ' ')
 }
 
-/** Boxes between `start` and `end`; stops at the first one that does not fit. */
-function* boxes(bytes: Uint8Array, start: number, end: number): Generator<Box> {
+/**
+ * Boxes between `start` and `end`: MP4_BOX_LIMIT at most, and no more than the read's budget;
+ * stops at the first one that does not fit.
+ */
+function* boxes(bytes: Uint8Array, start: number, end: number, budget: Budget): Generator<Box> {
   let pos = start
-  while (pos + 8 <= end) {
+  for (let visited = 0; pos + 8 <= end && visited < MP4_BOX_LIMIT && budget.left > 0; visited += 1) {
+    budget.left -= 1
     let size = u32(bytes, pos)
     let header = 8
     if (size === 1) {
@@ -284,8 +305,8 @@ function* boxes(bytes: Uint8Array, start: number, end: number): Generator<Box> {
   }
 }
 
-function child(bytes: Uint8Array, parent: Box, type: string): Box | null {
-  for (const box of boxes(bytes, parent.start, parent.end)) {
+function child(bytes: Uint8Array, parent: Box, type: string, budget: Budget): Box | null {
+  for (const box of boxes(bytes, parent.start, parent.end, budget)) {
     if (box.type === type) return box
   }
   return null
@@ -293,8 +314,9 @@ function child(bytes: Uint8Array, parent: Box, type: string): Box | null {
 
 /** The tracks of an MP4 or QuickTime file, wherever its `moov` box is. */
 export function readMp4Tracks(bytes: Uint8Array): Track[] {
+  const budget: Budget = { left: MP4_BOX_TOTAL_LIMIT }
   let moov: Box | null = null
-  for (const box of boxes(bytes, 0, bytes.length)) {
+  for (const box of boxes(bytes, 0, bytes.length, budget)) {
     if (box.type === 'moov') {
       moov = box
       break
@@ -304,21 +326,26 @@ export function readMp4Tracks(bytes: Uint8Array): Track[] {
     return []
   }
   const tracks: Track[] = []
-  for (const trak of boxes(bytes, moov.start, moov.end)) {
+  for (const trak of boxes(bytes, moov.start, moov.end, budget)) {
     if (trak.type !== 'trak') continue
-    const mdia = child(bytes, trak, 'mdia')
-    const hdlr = mdia && child(bytes, mdia, 'hdlr')
-    const minf = mdia && child(bytes, mdia, 'minf')
-    const stbl = minf && child(bytes, minf, 'stbl')
+    const mdia = child(bytes, trak, 'mdia', budget)
+    const hdlr = mdia && child(bytes, mdia, 'hdlr', budget)
+    const minf = mdia && child(bytes, mdia, 'minf', budget)
+    const stbl = minf && child(bytes, minf, 'stbl', budget)
     if (!mdia || !hdlr || hdlr.end - hdlr.start < 12) continue
     const handler = fourcc(bytes, hdlr.start + 8)
     const kind = handler === 'vide' ? 'video' : handler === 'soun' ? 'audio' : 'other'
-    const stsd = stbl && child(bytes, stbl, 'stsd')
+    const stsd = stbl && child(bytes, stbl, 'stsd', budget)
     const codec = stsd && stsd.end - stsd.start >= 16 ? fourcc(bytes, stsd.start + 12).trim() : ''
     const track: Track = { kind, codec }
     if (kind === 'video') {
-      const duration = sampleDuration(bytes, mdia, stbl)
+      const duration = sampleDuration(bytes, mdia, stbl, budget)
       if (duration) track.frameDuration = duration
+    }
+    // tkhd: version (1 byte), then 24 bits of flags; bit 0 says the track is enabled.
+    const tkhd = child(bytes, trak, 'tkhd', budget)
+    if (tkhd && tkhd.end - tkhd.start >= 4) {
+      track.enabled = (bytes[tkhd.start + 3] & 1) === 1
     }
     tracks.push(track)
   }
@@ -326,9 +353,9 @@ export function readMp4Tracks(bytes: Uint8Array): Track[] {
 }
 
 /** Seconds per sample from the sample table: the delta that covers the most samples. */
-function sampleDuration(bytes: Uint8Array, mdia: Box, stbl: Box | null): number | null {
-  const mdhd = child(bytes, mdia, 'mdhd')
-  const stts = stbl && child(bytes, stbl, 'stts')
+function sampleDuration(bytes: Uint8Array, mdia: Box, stbl: Box | null, budget: Budget): number | null {
+  const mdhd = child(bytes, mdia, 'mdhd', budget)
+  const stts = stbl && child(bytes, stbl, 'stts', budget)
   if (!mdhd || !stts || stts.end - stts.start < 8) return null
   const version = bytes[mdhd.start]
   const scaleAt = mdhd.start + (version === 1 ? 20 : 12)

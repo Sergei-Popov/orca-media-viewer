@@ -1,6 +1,6 @@
 import { assert, test } from 'orca/testing'
 import { ArrayBufferTarget, Muxer } from '../vendor/mp4-muxer/mp4-muxer.mjs'
-import { aviErrorText } from './avi/messages'
+import { aviErrorText, aviSoundLoss } from './avi/messages'
 import {
   AUDIO_CANDIDATES,
   BT601,
@@ -72,13 +72,35 @@ test('builds the MP4 muxer for a 24000/1001 (23.976 fps) AVI', () => {
   assert.equal(keyFrameInterval(fps), 48)
 })
 
-test('tags SD frames BT.601 and leaves HD to WebCodecs (BT.709)', () => {
-  assert.deepEqual(frameColorSpace(360), { matrix: 'smpte170m', primaries: 'smpte170m', transfer: 'smpte170m', fullRange: false })
-  assert.equal(frameColorSpace(576), BT601)
-  assert.equal(frameColorSpace(718), BT601)
-  assert.equal(frameColorSpace(720), undefined)
-  assert.equal(frameColorSpace(1080), undefined)
-  assert.equal(frameColorSpace(0), undefined)
+test('tags SD frames BT.601 by FourCC only for codecs without a colour description', () => {
+  assert.deepEqual(frameColorSpace(360, 'fourcc:XVID'), { matrix: 'smpte170m', primaries: 'smpte170m', transfer: 'smpte170m', fullRange: false })
+  // MPEG-4 Part 2, MS MPEG-4 (DivX 3), H.263, MJPEG, MPEG-1 and raw video: BT.601 under 720 lines.
+  for (const fourcc of ['XVID', 'DIVX', 'DX50', 'FMP4', 'MP4V', 'xvid', 'DIV3', 'MP43', 'MP42', 'MPG4', 'H263', 'MJPG', 'mjpa', 'MPG1', 'I420', 'DIB', '']) {
+    assert.equal(frameColorSpace(576, `fourcc:${fourcc}`), BT601, fourcc)
+  }
+  // H.264, HEVC and MPEG-2 can say which colours they use: WebCodecs' tag, as in 0.3.0.
+  for (const fourcc of ['H264', 'h264', 'X264', 'AVC1', 'HEVC', 'H265', 'MPG2', 'MPEG', 'WMV3', '?']) {
+    assert.equal(frameColorSpace(360, `fourcc:${fourcc}`), undefined, fourcc)
+  }
+  assert.equal(frameColorSpace(718, 'fourcc:DX50'), BT601)
+  assert.equal(frameColorSpace(720, 'fourcc:XVID'), undefined)
+  assert.equal(frameColorSpace(1080, 'fourcc:MJPG'), undefined)
+  assert.equal(frameColorSpace(0, 'fourcc:XVID'), undefined)
+  // The FourCC comes from the header: strf's compression, else strh's handler.
+  const ascii = (text: string) => [...text].map((c) => c.charCodeAt(0))
+  const le = (value: number, length: number) => Array.from({ length }, (_, i) => Math.floor(value / 256 ** i) % 256)
+  const chunk = (type: string, payload: number[]) => [...ascii(type), ...le(payload.length, 4), ...payload]
+  const aviWith = (compression: string | number[], handler: string) => {
+    const tag = typeof compression === 'string' ? ascii(compression) : compression
+    const bitmap = [...le(40, 4), ...le(640, 4), ...le(360, 4), 1, 0, 24, 0, ...tag, ...new Array<number>(20).fill(0)]
+    const strl = chunk('LIST', [...ascii('strl'), ...chunk('strh', [...ascii('vids'), ...ascii(handler), ...new Array<number>(48).fill(0)]), ...chunk('strf', bitmap)])
+    const body = [...ascii('AVI '), ...chunk('LIST', [...ascii('hdrl'), ...chunk('avih', new Array<number>(56).fill(0)), ...strl])]
+    return new Uint8Array([...ascii('RIFF'), ...le(body.length, 4), ...body])
+  }
+  const codecOf = (file: Uint8Array) => readAviStreams(file).find((track) => track.kind === 'video')?.codec ?? ''
+  assert.equal(frameColorSpace(360, codecOf(aviWith('XVID', 'xvid'))), BT601)
+  assert.equal(frameColorSpace(360, codecOf(aviWith('H264', 'H264'))), undefined)
+  assert.equal(frameColorSpace(360, codecOf(aviWith([0, 0, 0, 0], 'DIB '))), BT601)
 })
 
 test('says a supported codec that fails to open is a damaged file, and names a too-large frame', () => {
@@ -90,6 +112,20 @@ test('says a supported codec that fails to open is a damaged file, and names a t
   assert.equal(aviErrorText({ code: 'encoder' }, s), 'Orca cannot re-encode video here: WebCodecs is not available.')
   assert.equal(aviErrorText(null, s), 'The AVI file could not be converted.')
   assert.equal(aviErrorText({ code: 'failed' }, stringsFor('ru')), 'Не удалось преобразовать файл AVI.')
+})
+
+test('says the sound could not be decoded when the decoder has its codec, and names the codec when not', () => {
+  const xvid = { kind: 'video' as const, codec: 'fourcc:XVID' }
+  // MP3, PCM, AAC, AC3, MP2, MS and IMA ADPCM: the decoder has them, so no sound means damage.
+  for (const tag of [0x0055, 0x0001, 0x00ff, 0x2000, 0x0050, 0x0002, 0x0011]) {
+    assert.deepEqual(aviSoundLoss([xvid, { kind: 'audio', codec: `wave:${tag}` }]), { soundUndecoded: true }, `tag ${tag}`)
+  }
+  assert.deepEqual(aviSoundLoss([xvid, { kind: 'audio', codec: 'wave:353' }]), { droppedSound: 'WMA' })
+  assert.deepEqual(aviSoundLoss([xvid, { kind: 'audio', codec: 'wave:8193' }]), { droppedSound: 'DTS' })
+  assert.deepEqual(aviSoundLoss([xvid, { kind: 'audio', codec: 'wave:6' }]), { droppedSound: 'A-law (G.711)' })
+  assert.deepEqual(aviSoundLoss([xvid]), {})
+  assert.equal(stringsFor('en').soundUndecoded, 'The sound could not be decoded; playing without sound')
+  assert.equal(stringsFor('ru').soundUndecoded, 'Звук не удалось декодировать; видео играет без звука')
 })
 
 test('names the sound of an AVI that has only sound the decoder cannot read', () => {

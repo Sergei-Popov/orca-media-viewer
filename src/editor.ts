@@ -5,7 +5,7 @@
 // so Orca never saves the tab; an outside write reloads the media at the same position.
 
 import { AviConversionError, convertAvi, type AviConversion } from './avi/convert'
-import { aviErrorText, droppedAviSound } from './avi/messages'
+import { aviErrorText, aviSoundLoss } from './avi/messages'
 import { formatPercent } from './avi/plan'
 import { probeMedia, readAviStreams } from './container'
 import { isAudioType, mimeFor, normalizeType } from './format'
@@ -66,8 +66,8 @@ if (!api) {
           // The decoder's own rate: exact, so file info shows it and frame steps use it at once.
           fps: info.fps > 0 ? info.fps : undefined,
           hasVideoTrack: !info.audioOnly,
-          // A sound stream the decoder could not read: the video plays without it, and says so.
-          droppedSound: !info.audioOnly && !info.audioDelivered ? (droppedAviSound(streams) ?? undefined) : undefined
+          // A sound stream that gave no sound: the video plays without it, and says why.
+          ...(!info.audioOnly && !info.audioDelivered ? aviSoundLoss(streams) : {})
         })
       },
       (error: unknown) => {

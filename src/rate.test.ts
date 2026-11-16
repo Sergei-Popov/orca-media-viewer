@@ -101,6 +101,7 @@ test('steps one frame per press at 24, 25, 30 and 60 fps, also with millisecond 
       assert.deepEqual(step(times, 1 / fps, 12, 1), ascending(12), `${fps} fps, rounded ${roundToMs}`)
       assert.deepEqual(step(times, 1 / fps, 12, -1, 20), ascending(12, 8).reverse(), `${fps} fps back`)
       assert.deepEqual(step(times, 1 / fps, 12, 1, 0, false), ascending(12), `${fps} fps, key held`)
+      assert.deepEqual(step(times, 1 / fps, 12, -1, 20, false), ascending(12, 8).reverse(), `${fps} fps back, key held`)
     }
   }
 })
@@ -108,6 +109,23 @@ test('steps one frame per press at 24, 25, 30 and 60 fps, also with millisecond 
 test('steps from the shown frame when the clip does not start on the frame grid', () => {
   const times = frameTimes(25, 40, { start: 0.021, roundToMs: true })
   assert.deepEqual(step(times, 1 / 25, 12, 1), ascending(12))
+})
+
+test('the first step after a pause moves on from the frame on screen', () => {
+  // Paused after 1.8 s of a 30 fps MKV: the clock reads 1.760, the frame on screen is #53 (1.767).
+  for (const roundToMs of [false, true]) {
+    const times = frameTimes(30, 100, { roundToMs })
+    const shown = times[53]
+    const anchor = stepAnchor(1.76, shown, null, 1 / 30)
+    assert.equal(anchor, shown)
+    assert.equal(frameAt(times, frameStepTarget(anchor, 1 / 30, 1, 100 / 30)), 54)
+    assert.equal(frameAt(times, frameStepTarget(anchor, 1 / 30, -1, 100 / 30)), 52)
+  }
+  // 60 fps, paused 5 ms before the frame on screen.
+  const times60 = frameTimes(60, 200, { roundToMs: true })
+  assert.equal(frameAt(times60, frameStepTarget(stepAnchor(times60[107] - 0.005, times60[107], null, 1 / 60), 1 / 60, 1, 200 / 60)), 108)
+  // A playhead more than a frame before it (a seek the screen has not shown yet) is not anchored to it.
+  assert.equal(stepAnchor(1.6, times60[107], null, 1 / 60), Math.floor(1.6 * 60 + 1e-6) / 60)
 })
 
 test('stays on the first and last frame at the ends', () => {

@@ -72,7 +72,8 @@ VP9; Opus or AAC sound) write the MP4 that the player then plays. It takes a mom
 long one. Video: Xvid, DivX 3/4/5, MPEG-4 Part 2, H.264, H.263, MJPEG, MPEG-1/2, raw. Sound: MP3,
 MP2, AC3, AAC, PCM, IMA/MS ADPCM; surround is mixed down to stereo. An AVI with another video
 codec (for example WMV or Indeo) shows which codec it is. Sound in another codec (WMA, DTS, FLAC,
-Vorbis, G.711) is dropped: the video plays without sound and a notice names the sound codec.
+Vorbis, G.711) is dropped: the video plays without sound and a notice names the sound codec;
+damaged sound in a codec it has plays the same way, with a notice that it could not be decoded.
 Convert such files with `ffmpeg -i in.avi -c:v libx264 -c:a aac out.mp4`. Orca's 50 MiB limit for
 `.avi` applies.
 
@@ -80,9 +81,11 @@ Convert such files with `ffmpeg -i in.avi -c:v libx264 -c:a aac out.mp4`. Orca's
 
 - **Anamorphic AVI** (non-square pixels, such as a 720 × 576 PAL rip flagged 16:9) plays with
   square pixels, so the picture is too narrow: the conversion keeps the stored frame size.
-- **AVI colours.** The decoder does not pass on a stream's colour description, so converted
-  frames are tagged BT.601 below 720 lines and BT.709 from 720 lines up. A file that differs from
-  that rule plays with slightly shifted colours.
+- **AVI colours.** The decoder does not pass on a stream's colour description. SD video (under
+  720 lines) in a codec that has none (Xvid, DivX and other MPEG-4 Part 2, DivX 3, H.263, MJPEG,
+  MPEG-1, raw) is tagged BT.601; H.264 and MPEG-2, which can have one, and all HD video are tagged
+  BT.709. A file that differs from that rule, such as SD H.264 made for BT.601, plays with
+  slightly shifted colours.
 - **AVI errors.** The decoder reports one error for "codec not built in" and "stream does not
   open". Media Player calls the file damaged when the codec is one it has (Xvid, DivX, H.264,
   MJPEG …); a damaged header that names some other codec reads as that codec being unsupported.
@@ -91,8 +94,9 @@ Convert such files with `ffmpeg -i in.avi -c:v libx264 -c:a aac out.mp4`. Orca's
 - **Frame steps** use the frame duration the container declares (Matroska, WebM, MP4, MOV) or the
   AVI decoder's rate. A file that declares none, such as some browser recordings, steps at 30 fps
   until a second of playback at 1× has measured its rate.
-- **Files without a duration** (MediaRecorder WebM, unfinished recordings): the player seeks to
-  the end once when the file opens, so Chromium reads the whole file to find the duration.
+- **Files without a duration** (MediaRecorder WebM, piped or unfinished recordings): when the
+  file opens, the player seeks to 1 s, which gives Chromium the duration of a piped MKV, and only
+  when that does not, seeks past the end, so Chromium reads the whole file to find it.
 
 ## Install
 
@@ -125,6 +129,7 @@ orca plugin shot local.media-viewer --editor path/to/clip.mkv   # PNG of the edi
 - `src/container.ts` — reads Matroska/WebM, MP4/MOV and AVI headers: tracks, codecs, frame
   duration (tests in `src/container.test.ts`, which build the files byte by byte).
 - `src/rate.ts` — frame-rate measurement and frame-step targets (`src/rate.test.ts`).
+- `src/duration.ts` — finds the duration of a file that declares none (`src/duration.test.ts`).
 - `src/avi/` — AVI → MP4: `convert.ts` (editor side), `worker.ts` (Web Worker: decoder,
   WebCodecs, MP4 muxer), `plan.ts` and `messages.ts` (pure choices and texts, tested in
   `src/avi-plan.test.ts`).

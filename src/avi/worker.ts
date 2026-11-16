@@ -7,6 +7,7 @@
 
 import createAviDecoder, { type AviDecoder } from '../../vendor/ffmpeg/avi-decoder.mjs'
 import { ArrayBufferTarget, Muxer } from '../../vendor/mp4-muxer/mp4-muxer.mjs'
+import { readAviStreams } from '../container'
 import {
   AUDIO_CANDIDATES,
   AUDIO_SAMPLE_RATE,
@@ -130,6 +131,8 @@ async function loadDecoder(): Promise<AviDecoder> {
 }
 
 async function transcode(bytes: ArrayBuffer): Promise<void> {
+  // The header's video FourCC: whether the codec can describe its colours (frameColorSpace).
+  const videoCodec = readAviStreams(new Uint8Array(bytes)).find((track) => track.kind === 'video')?.codec ?? ''
   const m = await loadDecoder()
   const size = bytes.byteLength
   const ptr = m._avi_alloc(size)
@@ -191,7 +194,7 @@ async function transcode(bytes: ArrayBuffer): Promise<void> {
 
     const keyEvery = keyFrameInterval(fps)
     const frameDuration = Math.round(1_000_000 / (fps > 0 ? fps : 25))
-    const colorSpace = frameColorSpace(height)
+    const colorSpace = frameColorSpace(height, videoCodec)
     let frames = 0
     let audioChunks = 0
     let lastProgress = 0

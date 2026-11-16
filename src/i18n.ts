@@ -44,6 +44,7 @@ const en = {
   noPicture: 'This video’s codec ({codec}) does not play in Orca; playing sound only',
   noPictureUnknown: 'This video’s codec does not play in Orca; playing sound only',
   soundDropped: 'Sound in {codec} is not supported; playing without sound',
+  soundUndecoded: 'The sound could not be decoded; playing without sound',
   readOnly: 'read-only',
   /** Size units, from bytes up. */
   sizeUnits: ['B', 'KB', 'MB', 'GB', 'TB'] as readonly string[],
@@ -97,6 +98,7 @@ const ru: Strings = {
   noPicture: 'Видеокодек этого файла ({codec}) не воспроизводится в Orca; играет только звук',
   noPictureUnknown: 'Видеокодек этого файла не воспроизводится в Orca; играет только звук',
   soundDropped: 'Звук в {codec} не поддерживается; видео играет без звука',
+  soundUndecoded: 'Звук не удалось декодировать; видео играет без звука',
   readOnly: 'только чтение',
   sizeUnits: ['Б', 'КБ', 'МБ', 'ГБ', 'ТБ'],
   seekBadge: '{n} с'
