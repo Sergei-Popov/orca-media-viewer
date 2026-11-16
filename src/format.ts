@@ -272,3 +272,43 @@ export function actionForKey(input: KeyInput): KeyAction | null {
       return null
   }
 }
+
+/** What the file info overlay knows about the loaded media. */
+export type InfoFacts = {
+  /** The file's size in bytes. */
+  size: number
+  /** The picture's size; 0 when there is no picture (audio) or it is not known yet. */
+  width: number
+  height: number
+  /** In seconds; NaN until the metadata is in. */
+  duration: number
+  /** Frames per second measured during playback, or null until then. */
+  fps: number | null
+  /** The file type, e.g. `.mkv`, or '' when Orca did not send one. */
+  type: string
+}
+
+/** The labels and fallbacks the info overlay needs, from `Strings`. */
+export type InfoLabels = {
+  infoSize: string
+  infoResolution: string
+  infoDuration: string
+  infoFps: string
+  infoFpsPending: string
+  infoType: string
+  unknown: string
+}
+
+/**
+ * The rows of the file info overlay, as [label, value]. There is no file name row: Orca never
+ * tells a custom editor the file's name or path, and a made-up name would read as the real one.
+ */
+export function infoRows(facts: InfoFacts, s: InfoLabels): Array<[string, string]> {
+  return [
+    [s.infoSize, formatBytes(facts.size)],
+    [s.infoResolution, facts.width && facts.height ? `${facts.width} × ${facts.height}` : s.unknown],
+    [s.infoDuration, formatTime(facts.duration)],
+    [s.infoFps, facts.fps ? `${facts.fps}` : `— (${s.infoFpsPending})`],
+    [s.infoType, facts.type || s.unknown]
+  ]
+}

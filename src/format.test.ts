@@ -8,6 +8,7 @@ import {
   formatBytes,
   formatRate,
   formatTime,
+  infoRows,
   isAudioType,
   normalizeType,
   mimeFor,
@@ -100,4 +101,26 @@ test('picks Russian strings for ru locales', () => {
   assert.equal(stringsFor('ru-RU').audio, 'Аудио')
   assert.equal(stringsFor('en-US').audio, 'Audio')
   assert.equal(stringsFor(undefined).audio, 'Audio')
+})
+
+test('lists file info without a made-up file name', () => {
+  const s = stringsFor('en')
+  const facts = { size: 11196490, width: 1280, height: 720, duration: 60, fps: 24, type: '.avi' }
+  assert.deepEqual(infoRows(facts, s), [
+    ['Size', '10.7 MB'],
+    ['Resolution', '1280 × 720'],
+    ['Duration', '1:00'],
+    ['Frame rate', '24'],
+    ['Type', '.avi']
+  ])
+  // Orca never sends the file name, so no row may claim one.
+  assert.ok(infoRows(facts, s).every(([label, value]) => label !== 'File' && !value.startsWith('media.')))
+  assert.deepEqual(infoRows({ size: 512, width: 0, height: 0, duration: Number.NaN, fps: null, type: '' }, s), [
+    ['Size', '512 B'],
+    ['Resolution', 'unknown'],
+    ['Duration', '--:--'],
+    ['Frame rate', '— (measured during playback)'],
+    ['Type', 'unknown']
+  ])
+  assert.equal(infoRows(facts, stringsFor('ru'))[0][0], 'Размер')
 })

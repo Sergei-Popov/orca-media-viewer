@@ -7,6 +7,14 @@ All notable changes to this plugin are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Listing images and description: a fuchsia icon, and a cover and four screenshots in the hub's house style, rendered from a generated demo clip in a headless stage (`tools/listing.json`, `tools/make-listing-samples.sh`). The manifest's images carry only a path and an alt, and the description now starts with what the plugin is: a media player.
+
+### Fixed
+
+- File info no longer shows a made-up file name ("media.mkv"): Orca never tells an editor the file's name, so the overlay lists size, resolution, duration, frame rate and type.
+
 ## [0.3.0] - 2026-11-14
 
 ### Added
