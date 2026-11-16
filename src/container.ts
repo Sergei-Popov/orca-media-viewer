@@ -13,6 +13,8 @@ export type Track = {
   frameDuration?: number
   width?: number
   height?: number
+  /** MP4/QuickTime: the track header's enabled flag. Chromium plays only an enabled sound track. */
+  enabled?: boolean
 }
 
 /** What the player learns from a file's header before Chromium plays it. */
@@ -25,7 +27,10 @@ export type MediaProbe = {
   videoCodec?: string
   /** Seconds per frame of the first video track, when the container declares it. */
   frameDuration?: number
-  /** A sound codec Chromium does not play, when every sound track of the file is in one. */
+  /**
+   * A sound codec Chromium does not play, when every sound track of the file is in one; in MP4
+   * and QuickTime, every enabled sound track (when the file enables none, every sound track).
+   */
   droppedSound?: string
 }
 
@@ -73,7 +78,10 @@ export function summarize(tracks: Track[]): MediaProbe {
       probe.frameDuration = video.frameDuration
     }
   }
-  const audio = tracks.filter((track) => track.kind === 'audio')
+  const sound = tracks.filter((track) => track.kind === 'audio')
+  // Chromium plays the enabled sound track of an MP4, not another one it could decode.
+  const enabled = sound.filter((track) => track.enabled !== false)
+  const audio = enabled.length > 0 ? enabled : sound
   const unplayable = audio.map((track) => unplayableSoundName(track.codec))
   if (audio.length > 0 && unplayable.every((name) => name !== null)) {
     probe.droppedSound = unplayable[0] ?? undefined
@@ -319,6 +327,11 @@ export function readMp4Tracks(bytes: Uint8Array): Track[] {
     if (kind === 'video') {
       const duration = sampleDuration(bytes, mdia, stbl)
       if (duration) track.frameDuration = duration
+    }
+    // tkhd: version (1 byte), then 24 bits of flags; bit 0 says the track is enabled.
+    const tkhd = child(bytes, trak, 'tkhd')
+    if (tkhd && tkhd.end - tkhd.start >= 4) {
+      track.enabled = (bytes[tkhd.start + 3] & 1) === 1
     }
     tracks.push(track)
   }

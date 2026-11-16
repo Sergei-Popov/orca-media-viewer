@@ -98,12 +98,14 @@ function box(type: string, payload: number[]): number[] {
   return [...bigEndian(payload.length + 8, 4), ...ascii(type), ...payload]
 }
 
-function mp4Track(handler: string, entry: string, timescale: number, delta: number): number[] {
+function mp4Track(handler: string, entry: string, timescale: number, delta: number, tkhdFlags?: number): number[] {
+  // tkhd version 0: version, 24 bits of flags (1 = enabled, 2 = in movie), 80 bytes of fields.
+  const tkhd = tkhdFlags === undefined ? [] : box('tkhd', [0, 0, 0, tkhdFlags, ...new Array<number>(80).fill(0)])
   const mdhd = box('mdhd', [0, 0, 0, 0, ...bigEndian(0, 4), ...bigEndian(0, 4), ...bigEndian(timescale, 4), ...bigEndian(0, 4), 0, 0, 0, 0])
   const hdlr = box('hdlr', [0, 0, 0, 0, 0, 0, 0, 0, ...ascii(handler), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
   const stsd = box('stsd', [0, 0, 0, 0, ...bigEndian(1, 4), ...box(entry, new Array<number>(8).fill(0))])
   const stts = box('stts', [0, 0, 0, 0, ...bigEndian(2, 4), ...bigEndian(1, 4), ...bigEndian(500, 4), ...bigEndian(240, 4), ...bigEndian(delta, 4)])
-  return box('trak', box('mdia', [...mdhd, ...hdlr, ...box('minf', box('stbl', [...stsd, ...stts]))]))
+  return box('trak', [...tkhd, ...box('mdia', [...mdhd, ...hdlr, ...box('minf', box('stbl', [...stsd, ...stts]))])])
 }
 
 test('reads MP4 tracks wherever the moov box is', () => {
@@ -119,6 +121,23 @@ test('reads MP4 tracks wherever the moov box is', () => {
   assert.equal(probe.droppedSound, 'AC3')
   assert.equal(probeMedia(new Uint8Array([...box('moov', mp4Track('soun', 'mp4a', 44100, 1024))]), 'm4a').hasVideo, false)
   assert.equal(probeMedia(new Uint8Array(box('moov', mp4Track('vide', 'apcn', 25, 1))), 'mov').videoCodec, 'ProRes')
+})
+
+test('judges only the enabled MP4 sound track: Chromium plays that one', () => {
+  const mp4 = (...traks: number[][]) => new Uint8Array(box('moov', traks.flat()))
+  const video = mp4Track('vide', 'avc1', 25, 1, 3)
+  // AC3 enabled, AAC as a disabled alternate (ffmpeg's -disposition:a:0 default): no sound plays.
+  const ac3First = probeMedia(mp4(video, mp4Track('soun', 'ac-3', 48000, 1536, 3), mp4Track('soun', 'mp4a', 48000, 1024, 2)), 'mp4')
+  assert.deepEqual(ac3First.tracks.map((track) => track.enabled), [true, true, false])
+  assert.equal(ac3First.droppedSound, 'AC3')
+  assert.equal(probeMedia(mp4(video, mp4Track('soun', 'ec-3', 48000, 1536, 3), mp4Track('soun', 'mp4a', 48000, 1024, 2)), 'mov').droppedSound, 'E-AC3')
+  // AAC enabled, AC3 disabled, in either order: the AAC plays.
+  assert.equal(probeMedia(mp4(video, mp4Track('soun', 'ac-3', 48000, 1536, 2), mp4Track('soun', 'mp4a', 48000, 1024, 3)), 'mp4').droppedSound, undefined)
+  assert.equal(probeMedia(mp4(video, mp4Track('soun', 'mp4a', 48000, 1024, 3), mp4Track('soun', 'ac-3', 48000, 1536, 2)), 'mp4').droppedSound, undefined)
+  // Both enabled, or none enabled: every sound track counts, as before.
+  assert.equal(probeMedia(mp4(video, mp4Track('soun', 'ac-3', 48000, 1536, 3), mp4Track('soun', 'mp4a', 48000, 1024, 3)), 'mp4').droppedSound, undefined)
+  assert.equal(probeMedia(mp4(video, mp4Track('soun', 'ac-3', 48000, 1536, 2), mp4Track('soun', 'mp4a', 48000, 1024, 2)), 'mp4').droppedSound, undefined)
+  assert.equal(probeMedia(mp4(video, mp4Track('soun', 'ac-3', 48000, 1536, 2)), 'mp4').droppedSound, 'AC3')
 })
 
 // --- AVI ----------------------------------------------------------------------------------------
