@@ -7,6 +7,31 @@ All notable changes to this plugin are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-11-16
+
+### Changed
+
+- Listing images and description: a fuchsia icon, and a cover and four screenshots in the hub's house style, rendered from a generated demo clip in a headless stage (`tools/listing.json`, `tools/make-listing-samples.sh`). The manifest's images carry only a path and an alt, and the description now starts with what the plugin is: a media player.
+
+### Fixed
+
+- File info no longer shows a made-up file name ("media.mkv"): Orca never tells an editor the file's name, so the overlay lists size, resolution, duration, frame rate and type.
+- AVI files at 23.976, 29.97, 59.94, 12.5 or another fractional frame rate convert and play; they failed with "The AVI file could not be converted".
+- File info shows the right frame rate: the AVI decoder's exact rate, otherwise a rate measured over at least a second of playback at 1× and named by the common rate it is (30, not 29.97, for a 30 fps MKV). It shows "—" until then, and audio files have no resolution or frame rate rows.
+- Frame steps move exactly one frame on a freshly opened, paused clip, at 24, 25, 30 or 60 fps and with Matroska's millisecond timestamps: they use the container's frame duration or the AVI rate and step from the frame on screen, so the first step after pausing playback no longer repeats that frame.
+- A video file whose video codec Orca's Chromium does not decode (MPEG-2, Xvid in MKV, ProRes) no longer passes for an audio file: it plays its sound with a notice that names the video codec. A file whose header cannot be read to its end, such as a damaged one, shows the audio cover as before.
+- Sound that cannot play is no longer dropped silently: an MKV, WebM or MP4 whose sound is AC3, E-AC3, DTS or TrueHD (in MP4 and MOV, the enabled sound track, which Chromium plays even when a disabled AAC alternate follows), and an AVI with sound the decoder lacks (WMA, DTS, FLAC, G.711), plays the picture with a notice that names the sound codec. An AVI with only such sound names it in the error. When an AVI's sound is in a codec the decoder has (MP3, PCM, AAC, AC3, MP2, ADPCM) and still gives nothing, as a damaged stream does, the notice says the sound could not be decoded.
+- WebM, WebA and Matroska files without a duration, such as browser (MediaRecorder) recordings and live or unfinished captures in VP8, VP9, AV1 or sound only, now show their length, and the seek bar, `End` and 0–9 work: the player finds the duration when the file opens. A piped or crashed MKV or WebM with H.264 or HEVC video still plays without a duration, as in 0.3.0.
+- AVI conversion errors name the cause: a damaged file, not an unsupported codec, when the codec is built in; the frame size when it is too large for the video encoder; and an AVI from which nothing decodes is an error instead of an empty 0:00 player.
+- SD AVI in Xvid, DivX, MJPEG and the other codecs that carry no colour description keeps its colours: the converted video is tagged BT.601 instead of BT.709, which oversaturated greens and reds. H.264 and MPEG-2 AVI, whose streams can describe their colours, convert as in 0.3.0, so SD H.264 tagged BT.709 keeps its colours too.
+- The decode error no longer says AVI does not play, and says that AC3, E-AC3, DTS and TrueHD sound does not play.
+- The Russian UI writes sizes, seconds and speeds in Russian (`1,9 МБ`, `+5 с`, `0,5×`), and letter shortcuts work with a Russian keyboard layout.
+- The README gives Orca's real size limits (50 MiB for `.mkv`, `.avi`, `.mka`, `.weba`; 64 MiB for `.mp4`, `.mov`, `.webm` and audio), names `wasm/` as LGPL-2.1-or-later, and runs `orca plugin types .` before the type check.
+
+### Removed
+
+- Full screen (the button, `F` and double-click): Orca denies full screen to plugin frames, so it never worked.
+
 ## [0.3.0] - 2026-11-14
 
 ### Added

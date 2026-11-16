@@ -5,7 +5,8 @@
 // time: a video frame scaled to I420 at the stream's (even) size, or audio resampled to 48 kHz
 // interleaved float, stereo or mono. JavaScript re-encodes them with WebCodecs into MP4.
 //
-// FFmpeg is LGPL-2.1-or-later; this file and the build are LGPL-2.1-or-later too (see LICENSE).
+// FFmpeg is LGPL-2.1-or-later; this file and the build are LGPL-2.1-or-later too
+// (see vendor/ffmpeg/LICENSE).
 
 #include <emscripten/emscripten.h>
 #include <libavcodec/avcodec.h>
@@ -34,7 +35,7 @@ typedef struct {
   int64_t pos;
 } MemSource;
 
-// FFmpeg 7.1's H.264 SEI code calls this AV1 film-grain cleanup even when no AV1 code is built.
+// FFmpeg 7.1.1's H.264 SEI code calls this AV1 film-grain cleanup even when no AV1 code is built.
 // AVI never carries AV1 film grain, so there is nothing to free.
 void ff_aom_uninit_film_grain_params(void *params) { (void)params; }
 

@@ -7,11 +7,15 @@
 
 import createAviDecoder, { type AviDecoder } from '../../vendor/ffmpeg/avi-decoder.mjs'
 import { ArrayBufferTarget, Muxer } from '../../vendor/mp4-muxer/mp4-muxer.mjs'
+import { readAviStreams } from '../container'
 import {
   AUDIO_CANDIDATES,
   AUDIO_SAMPLE_RATE,
   audioBitrate,
+  frameColorSpace,
+  frameSizeText,
   keyFrameInterval,
+  muxerVideoTrack,
   openErrorCode,
   toMicroseconds,
   VIDEO_CANDIDATES,
@@ -28,7 +32,16 @@ export type AviMessage =
   | {
       type: 'done'
       buffer: ArrayBuffer
-      info: { video: string; audio: string; width: number; height: number; fps: number; audioOnly: boolean }
+      info: {
+        video: string
+        audio: string
+        width: number
+        height: number
+        fps: number
+        audioOnly: boolean
+        /** False when the file has a sound stream but no sound came out of it (an unknown codec). */
+        audioDelivered: boolean
+      }
     }
   | { type: 'error'; code: AviErrorCode; codec?: string; message?: string }
 
@@ -118,6 +131,8 @@ async function loadDecoder(): Promise<AviDecoder> {
 }
 
 async function transcode(bytes: ArrayBuffer): Promise<void> {
+  // The header's video FourCC: whether the codec can describe its colours (frameColorSpace).
+  const videoCodec = readAviStreams(new Uint8Array(bytes)).find((track) => track.kind === 'video')?.codec ?? ''
   const m = await loadDecoder()
   const size = bytes.byteLength
   const ptr = m._avi_alloc(size)
@@ -140,7 +155,9 @@ async function transcode(bytes: ArrayBuffer): Promise<void> {
 
     const video = hasVideo ? await chooseVideo(width, height, fps) : null
     if (hasVideo && !video) {
-      throw new AviError('encoder')
+      // When the encoders take an ordinary size, it is this frame size that they refuse.
+      const ordinary = typeof VideoEncoder !== 'undefined' && (await chooseVideo(640, 360, fps)) !== null
+      throw ordinary ? new AviError('too-large', frameSizeText(width, height)) : new AviError('encoder')
     }
     const audio = hasAudio ? await chooseAudio(channels) : null
     if (!video && !audio) {
@@ -149,7 +166,7 @@ async function transcode(bytes: ArrayBuffer): Promise<void> {
 
     const muxer = new Muxer({
       target: new ArrayBufferTarget(),
-      video: video ? { codec: video.mux, width, height, frameRate: fps } : undefined,
+      video: video ? muxerVideoTrack(video.mux, width, height) : undefined,
       audio: audio ? { codec: audio.mux, numberOfChannels: channels, sampleRate: AUDIO_SAMPLE_RATE } : undefined,
       fastStart: 'in-memory',
       firstTimestampBehavior: 'cross-track-offset'
@@ -177,7 +194,9 @@ async function transcode(bytes: ArrayBuffer): Promise<void> {
 
     const keyEvery = keyFrameInterval(fps)
     const frameDuration = Math.round(1_000_000 / (fps > 0 ? fps : 25))
+    const colorSpace = frameColorSpace(height, videoCodec)
     let frames = 0
+    let audioChunks = 0
     let lastProgress = 0
 
     for (;;) {
@@ -200,7 +219,8 @@ async function transcode(bytes: ArrayBuffer): Promise<void> {
           codedWidth: width,
           codedHeight: height,
           timestamp: toMicroseconds(m._avi_video_pts()),
-          duration: frameDuration
+          duration: frameDuration,
+          ...(colorSpace ? { colorSpace } : {})
         })
         videoEncoder.encode(frame, { keyFrame: frames % keyEvery === 0 })
         frame.close()
@@ -220,6 +240,7 @@ async function transcode(bytes: ArrayBuffer): Promise<void> {
         })
         audioEncoder.encode(data)
         data.close()
+        audioChunks += 1
         await backpressure(audioEncoder, 32)
       }
       const now = performance.now()
@@ -236,7 +257,8 @@ async function transcode(bytes: ArrayBuffer): Promise<void> {
     }
     videoEncoder?.close()
     audioEncoder?.close()
-    if (video && frames === 0) {
+    // Nothing decoded at all (a damaged or cut-off file): an empty MP4 would play as 0:00.
+    if ((video && frames === 0) || (!video && audioChunks === 0)) {
       throw new AviError('failed')
     }
     muxer.finalize()
@@ -251,7 +273,8 @@ async function transcode(bytes: ArrayBuffer): Promise<void> {
           width,
           height,
           fps,
-          audioOnly: !video
+          audioOnly: !video,
+          audioDelivered: audioChunks > 0
         }
       },
       [buffer]

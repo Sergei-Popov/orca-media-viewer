@@ -6,17 +6,21 @@ import {
   actionForKey,
   baseName,
   clamp,
-  estimateFps,
-  formatBytes,
+  formatNumber,
+  formatPercentOf,
   formatRate,
   formatTime,
+  infoRows,
   seekTarget,
+  stageWithoutPicture,
   stepRate,
   timestampForFile,
   type KeyAction
 } from './format'
 import type { Strings } from './i18n'
+import { findDuration } from './duration'
 import { icon, type IconName } from './icons'
+import { FrameRateMeter, displayFps, frameStepTarget, stepAnchor, type PendingStep } from './rate'
 
 export type VideoSource = {
   /** A `blob:` URL; the player revokes it when it loads another source or is disposed. */
@@ -27,6 +31,20 @@ export type VideoSource = {
   type: string
   /** An audio-only file: show a cover and hide the picture-only controls. */
   audio?: boolean
+  /** The exact frame rate, when it is known before playback (the AVI decoder's). */
+  fps?: number
+  /** Seconds per frame as the container declares it (Matroska, MP4), for frame steps. */
+  frameDuration?: number
+  /** False when the container has no video track; a video file without a picture then gets the audio cover. */
+  hasVideoTrack?: boolean
+  /** The video codec's name from the container, for the notice when Chromium cannot decode it. */
+  videoCodec?: string
+  /** The sound codec, when every sound track is in one this player cannot play: it says so. */
+  droppedSound?: string
+  /** A sound track in a codec that plays gave no sound (a damaged AVI sound stream): it says so. */
+  soundUndecoded?: boolean
+  /** False: never seek to find a missing duration (H.264 or HEVC in Matroska; see duration.ts). */
+  durationProbe?: boolean
 }
 
 export type LoadOptions = {
@@ -42,6 +60,8 @@ export type PlayerOptions = {
   onEnded?: () => void
   /** Listen for the page's keyboard shortcuts (default true). */
   keyboard?: boolean
+  /** Orca's UI language (`orca.locale`), for numbers: `1,5 МБ` in Russian. */
+  locale?: string
 }
 
 type Prefs = { volume: number; muted: boolean; rate: number; loop: boolean }
@@ -122,13 +142,13 @@ export class Player {
   private readonly message: HTMLDivElement
   private readonly info: HTMLDListElement
   private readonly toast: HTMLDivElement
+  private readonly notice: HTMLDivElement
   private readonly cover: HTMLDivElement
   private readonly coverType: HTMLDivElement
   private readonly playButton: HTMLButtonElement
   private readonly muteButton: HTMLButtonElement
   private readonly loopButton: HTMLButtonElement
   private readonly fitButton: HTMLButtonElement
-  private readonly fullscreenButton: HTMLButtonElement
   private readonly infoButton: HTMLButtonElement
   private readonly snapshotButton: HTMLButtonElement
   private readonly frameButtons: HTMLButtonElement[]
@@ -138,10 +158,20 @@ export class Player {
   private readonly time: HTMLSpanElement
   private source: VideoSource | null = null
   private prefs: Prefs = loadPrefs()
-  private fps = DEFAULT_FPS
-  private fpsMeasured = false
+  private readonly meter = new FrameRateMeter()
+  /** The frame rate measured during playback, once it is solid. */
+  private measuredFps: number | null = null
+  /** Media time of the frame on screen, from requestVideoFrameCallback. */
+  private shownTime: number | null = null
+  private pendingStep: PendingStep | null = null
   private seeking = false
   private actualSize = false
+  /** Counts the sources opened, so work for an earlier one stops (also a reopen of the same source). */
+  private generation = 0
+  /** The running duration probe: aborted when another source opens. */
+  private probe: AbortController | null = null
+  /** Where the opening source goes once it is ready: an outside change meanwhile keeps it. */
+  private restoring: { at: number; playing: boolean } | null = null
   private timers = new Map<string, number>()
   private disposers: Array<() => void> = []
 
@@ -160,11 +190,12 @@ export class Player {
     this.message = el('div', 'vv-message')
     this.info = el('dl', 'vv-info')
     this.toast = el('div', 'vv-toast', { role: 'status' })
+    this.notice = el('div', 'vv-notice', { role: 'status' })
     this.cover = el('div', 'vv-cover')
     this.cover.innerHTML = icon('music')
     this.coverType = el('div', 'vv-cover-type')
     this.cover.append(this.coverType)
-    this.stage.append(this.video, this.cover, this.flash, this.badge, this.info, this.message)
+    this.stage.append(this.video, this.cover, this.flash, this.badge, this.notice, this.info, this.message)
 
     const bar = el('div', 'vv-bar')
     const seekRow = el('div', 'vv-seek-row')
@@ -183,14 +214,13 @@ export class Player {
     for (const value of RATES) {
       const option = el('option')
       option.value = String(value)
-      option.textContent = formatRate(value)
+      option.textContent = formatRate(value, options.locale)
       this.rate.append(option)
     }
     this.loopButton = iconButton('loop', s.loop)
     this.snapshotButton = iconButton('camera', s.snapshot, 'vv-optional vv-video-only')
     this.fitButton = iconButton('actual', s.fit, 'vv-optional vv-video-only')
     this.infoButton = iconButton('info', s.info)
-    this.fullscreenButton = iconButton('fullscreen', s.fullscreen, 'vv-video-only')
     controls.append(
       this.playButton,
       frameBack,
@@ -202,15 +232,11 @@ export class Player {
       this.loopButton,
       this.snapshotButton,
       this.fitButton,
-      this.infoButton,
-      this.fullscreenButton
+      this.infoButton
     )
     bar.append(seekRow, controls)
     this.root.append(this.stage, bar, this.toast)
 
-    if (!document.fullscreenEnabled) {
-      this.fullscreenButton.classList.add('vv-hidden')
-    }
     if (!globalThis.orca?.files) {
       this.snapshotButton.classList.add('vv-hidden')
     }
@@ -224,34 +250,106 @@ export class Player {
   /** Plays `source`, replacing the current one. */
   load(source: VideoSource, options: LoadOptions = {}): void {
     const previous = this.source
-    const resumeAt = options.keepPosition && previous ? this.video.currentTime : 0
-    const resumePlaying = options.keepPosition && previous ? !this.video.paused : options.autoplay === true
+    // While the previous source still opens, its playhead is the probe's, not the viewer's: keep
+    // the position it was going back to.
+    const keep =
+      options.keepPosition && previous
+        ? (this.restoring ?? { at: this.video.currentTime, playing: !this.video.paused })
+        : null
+    const resumeAt = keep ? keep.at : 0
+    const resumePlaying = keep ? keep.playing : options.autoplay === true
     this.source = source
-    this.fps = DEFAULT_FPS
-    this.fpsMeasured = false
+    this.open(source, resumeAt, resumePlaying, true)
+    if (previous && previous.url !== source.url) {
+      URL.revokeObjectURL(previous.url)
+    }
+  }
+
+  /** Points the element at `source`; `probe` false skips the duration probe (the fallback). */
+  private open(source: VideoSource, resumeAt: number, resumePlaying: boolean, probe: boolean): void {
+    const generation = ++this.generation
+    this.probe?.abort()
+    this.probe = null
+    this.restoring = { at: resumeAt, playing: resumePlaying }
+    this.meter.reset()
+    this.measuredFps = null
+    this.shownTime = null
+    this.pendingStep = null
     this.hideMessage()
+    this.hideNotice()
     this.stage.classList.remove('empty')
     this.setAudio(source.audio === true)
     this.video.src = source.url
     this.video.load()
-    if (previous && previous.url !== source.url) {
-      URL.revokeObjectURL(previous.url)
+    const onReady = () => void this.ready(source, resumeAt, resumePlaying, probe, generation)
+    this.video.addEventListener('loadedmetadata', onReady, { once: true })
+    this.watchFrames(generation)
+  }
+
+  /** The metadata is in: picks picture or cover, finds a missing duration, restores the playhead. */
+  private async ready(
+    source: VideoSource,
+    resumeAt: number,
+    resumePlaying: boolean,
+    probe: boolean,
+    generation: number
+  ): Promise<void> {
+    if (generation !== this.generation) {
+      return
     }
-    const onReady = () => {
-      if (!this.video.videoWidth) {
+    const v = this.video
+    if (!v.videoWidth) {
+      if (stageWithoutPicture(source.audio === true, source.hasVideoTrack) === 'no-picture') {
+        // A video file whose picture Chromium cannot decode, while its sound plays: say so
+        // instead of passing it off as an audio file.
+        this.setNoPicture(source.videoCodec)
+      } else {
         this.setAudio(true)
       }
-      if (resumeAt > 0) {
-        this.video.currentTime = Math.min(resumeAt, this.video.duration || resumeAt)
-      }
-      this.applyRate()
-      if (resumePlaying) {
-        void this.video.play().catch(() => undefined)
-      }
-      this.renderInfo()
+    } else if (source.droppedSound) {
+      this.showNotice(this.s.soundDropped.replace('{codec}', source.droppedSound))
+    } else if (source.soundUndecoded) {
+      this.showNotice(this.s.soundUndecoded)
     }
-    this.video.addEventListener('loadedmetadata', onReady, { once: true })
-    this.watchFrames()
+    // A recording or a live capture declares no duration: find it before the playhead is restored.
+    if (probe && source.durationProbe !== false && !Number.isFinite(v.duration)) {
+      const controller = new AbortController()
+      this.probe = controller
+      const result = await findDuration(v, {
+        decodedFrames: () => v.getVideoPlaybackQuality?.().totalVideoFrames ?? 0,
+        signal: controller.signal
+      })
+      if (generation !== this.generation) {
+        return
+      }
+      this.probe = null
+      if (result === 'fallback') {
+        // Chromium failed on the probe's seeks: open the file again and play it without a duration.
+        this.open(source, resumeAt, resumePlaying, false)
+        return
+      }
+    }
+    this.restoring = null
+    if (resumeAt > 0) {
+      v.currentTime = Math.min(resumeAt, this.mediaDuration() || resumeAt)
+    }
+    this.applyRate()
+    if (resumePlaying) {
+      void v.play().catch(() => undefined)
+    }
+    this.renderTime()
+    this.renderInfo()
+  }
+
+  /** The duration, or where the seekable range ends when Chromium still has none; NaN if neither. */
+  private mediaDuration(): number {
+    const v = this.video
+    if (Number.isFinite(v.duration)) {
+      return v.duration
+    }
+    const ranges = v.seekable
+    const end = ranges.length > 0 ? ranges.end(ranges.length - 1) : Number.NaN
+    return Number.isFinite(end) && end > 0 ? end : Number.NaN
   }
 
   /** Shows a centred message over an empty stage, e.g. while the file loads or when it is text. */
@@ -270,6 +368,10 @@ export class Player {
 
   /** Clears the stage: no source, no message. */
   clear(): void {
+    this.generation += 1
+    this.probe?.abort()
+    this.probe = null
+    this.restoring = null
     if (this.source) {
       URL.revokeObjectURL(this.source.url)
     }
@@ -280,6 +382,7 @@ export class Player {
     this.setAudio(false)
     this.info.classList.remove('show')
     this.hideMessage()
+    this.hideNotice()
     this.setControlsEnabled(false)
     this.renderTime()
   }
@@ -319,25 +422,29 @@ export class Player {
       case 'seek':
         this.seekBy(action.delta)
         break
-      case 'seek-fraction':
-        if (Number.isFinite(v.duration)) {
-          v.currentTime = v.duration * action.fraction
+      case 'seek-fraction': {
+        const duration = this.mediaDuration()
+        if (Number.isFinite(duration)) {
+          v.currentTime = duration * action.fraction
         }
         break
+      }
       case 'seek-start':
         v.currentTime = 0
         break
-      case 'seek-end':
-        if (Number.isFinite(v.duration)) {
-          v.currentTime = Math.max(0, v.duration - 0.05)
+      case 'seek-end': {
+        const duration = this.mediaDuration()
+        if (Number.isFinite(duration)) {
+          v.currentTime = Math.max(0, duration - 0.05)
         }
         break
+      }
       case 'frame':
         if (!this.root.classList.contains('audio')) this.stepFrame(action.direction)
         break
       case 'volume':
         this.setVolume(v.volume + action.delta)
-        this.showBadge(`${Math.round(v.volume * 100)}%`)
+        this.showBadge(formatPercentOf(v.volume, this.options.locale))
         break
       case 'mute':
         this.setMuted(!v.muted)
@@ -350,9 +457,6 @@ export class Player {
         break
       case 'loop':
         this.setLoop(!v.loop)
-        break
-      case 'fullscreen':
-        if (!this.root.classList.contains('audio')) void this.toggleFullscreen()
         break
       case 'info':
         this.toggleInfo()
@@ -385,10 +489,8 @@ export class Player {
     on(this.snapshotButton, 'click', () => void this.snapshot())
     on(this.fitButton, 'click', () => this.toggleFit())
     on(this.infoButton, 'click', () => this.toggleInfo())
-    on(this.fullscreenButton, 'click', () => void this.toggleFullscreen())
     on(this.video, 'click', () => this.togglePlay())
     on(this.cover, 'click', () => this.togglePlay())
-    on(this.video, 'dblclick', () => void this.toggleFullscreen())
     on(this.volume, 'input', () => this.setVolume(Number(this.volume.value)))
     on(this.rate, 'change', () => this.setRate(Number(this.rate.value)))
 
@@ -417,7 +519,7 @@ export class Player {
         // A speed outside the list (set by the browser) still shows.
         const option = el('option')
         option.value = String(v.playbackRate)
-        option.textContent = formatRate(v.playbackRate)
+        option.textContent = formatRate(v.playbackRate, this.options.locale)
         this.rate.append(option)
         this.rate.value = option.value
       }
@@ -429,10 +531,6 @@ export class Player {
       }
     })
     on(v, 'error', () => this.renderError())
-    on(document, 'fullscreenchange', () => {
-      const full = document.fullscreenElement === this.root
-      setIcon(this.fullscreenButton, full ? 'exitFullscreen' : 'fullscreen', this.s.fullscreen)
-    })
     if (this.options.keyboard !== false) {
       on(window, 'keydown', (event) => {
         this.handleKey(event as KeyboardEvent)
@@ -462,7 +560,25 @@ export class Player {
   private setAudio(audio: boolean): void {
     this.root.classList.toggle('audio', audio)
     this.stage.classList.toggle('audio', audio)
+    this.stage.classList.remove('no-picture')
     this.coverType.textContent = audio ? (this.source?.type.replace(/^\./, '') || this.s.audio) : ''
+  }
+
+  /** Sound without a picture in a video file: the picture-only controls go, the notice says why. */
+  private setNoPicture(codec: string | undefined): void {
+    this.root.classList.add('audio')
+    this.stage.classList.add('no-picture')
+    this.showNotice(codec ? this.s.noPicture.replace('{codec}', codec) : this.s.noPictureUnknown)
+  }
+
+  private showNotice(text: string): void {
+    this.notice.textContent = text
+    this.notice.classList.add('show')
+  }
+
+  private hideNotice(): void {
+    this.notice.textContent = ''
+    this.notice.classList.remove('show')
   }
 
   private togglePlay(): void {
@@ -481,8 +597,9 @@ export class Player {
 
   private seekBy(delta: number): void {
     const v = this.video
-    v.currentTime = seekTarget(v.currentTime, delta, v.duration)
-    this.showBadge(`${delta > 0 ? '+' : '−'}${Math.abs(delta)}s`)
+    v.currentTime = seekTarget(v.currentTime, delta, this.mediaDuration())
+    const amount = `${delta > 0 ? '+' : '−'}${formatNumber(Math.abs(delta), this.options.locale)}`
+    this.showBadge(this.s.seekBadge.replace('{n}', amount))
   }
 
   private stepFrame(direction: 1 | -1): void {
@@ -491,7 +608,22 @@ export class Player {
       return
     }
     v.pause()
-    v.currentTime = seekTarget(v.currentTime, direction / this.fps, v.duration)
+    const duration = this.frameDuration()
+    const anchor = stepAnchor(v.currentTime, this.shownTime, this.pendingStep, duration)
+    const target = frameStepTarget(anchor, duration, direction, this.mediaDuration())
+    this.pendingStep = { target, anchor: Math.max(0, anchor + direction * duration) }
+    v.currentTime = target
+  }
+
+  /**
+   * Seconds per frame for a step: the AVI decoder's exact rate, else the container's declared
+   * frame duration, else the rate measured during playback, else 30 fps.
+   */
+  private frameDuration(): number {
+    const source = this.source
+    if (source?.fps) return 1 / source.fps
+    if (source?.frameDuration) return source.frameDuration
+    return 1 / (this.measuredFps ?? DEFAULT_FPS)
   }
 
   private setVolume(value: number): void {
@@ -514,7 +646,7 @@ export class Player {
     this.prefs = { ...this.prefs, rate }
     this.applyRate()
     this.persist()
-    this.showBadge(formatRate(rate))
+    this.showBadge(formatRate(rate, this.options.locale))
   }
 
   private setLoop(loop: boolean): void {
@@ -530,7 +662,7 @@ export class Player {
     this.stage.classList.toggle('actual', this.actualSize)
     this.fitButton.setAttribute('aria-pressed', String(this.actualSize))
     setIcon(this.fitButton, this.actualSize ? 'fit' : 'actual', this.s.fit)
-    this.showBadge(this.actualSize ? '100%' : '⤢')
+    this.showBadge(this.actualSize ? formatPercentOf(1, this.options.locale) : '⤢')
   }
 
   private toggleInfo(): void {
@@ -538,18 +670,6 @@ export class Player {
     this.info.classList.toggle('show', show && this.source !== null)
     this.infoButton.setAttribute('aria-pressed', String(show && this.source !== null))
     this.renderInfo()
-  }
-
-  private async toggleFullscreen(): Promise<void> {
-    try {
-      if (document.fullscreenElement) {
-        await document.exitFullscreen()
-      } else if (document.fullscreenEnabled) {
-        await this.root.requestFullscreen()
-      }
-    } catch {
-      // The frame may not allow full screen; the button is hidden when it never can.
-    }
   }
 
   private async snapshot(): Promise<void> {
@@ -584,34 +704,32 @@ export class Player {
     }
   }
 
-  /** Measures the frame rate from presented frames, for frame stepping and the info overlay. */
-  private watchFrames(): void {
+  /**
+   * Follows the frames the video presents (requestVideoFrameCallback): the frame on screen for
+   * frame steps, and, while it plays at 1×, the frame rate for the info overlay (FrameRateMeter).
+   */
+  private watchFrames(generation: number): void {
+    type FrameMeta = { mediaTime: number }
     const v = this.video as HTMLVideoElement & {
-      requestVideoFrameCallback?: (cb: (now: number, meta: { mediaTime: number; presentedFrames: number }) => void) => number
+      requestVideoFrameCallback?: (cb: (now: number, meta: FrameMeta) => void) => number
     }
     if (typeof v.requestVideoFrameCallback !== 'function') {
       return
     }
     const source = this.source
-    let last: { mediaTime: number; presentedFrames: number } | null = null
-    let samples = 0
-    const tick = (_now: number, meta: { mediaTime: number; presentedFrames: number }) => {
-      if (this.source !== source || this.fpsMeasured) {
+    const tick = (_now: number, meta: FrameMeta) => {
+      if (generation !== this.generation || !source) {
         return
       }
-      if (last && !v.paused && meta.presentedFrames > last.presentedFrames) {
-        const fps = estimateFps(meta.mediaTime - last.mediaTime, meta.presentedFrames - last.presentedFrames)
-        if (fps) {
-          samples += 1
-          this.fps = fps
-          if (samples >= 5) {
-            this.fpsMeasured = true
-            this.renderInfo()
-            return
-          }
+      this.shownTime = meta.mediaTime
+      if (!v.paused && !source.fps && this.measuredFps === null) {
+        const decoded = v.getVideoPlaybackQuality?.().totalVideoFrames
+        const fps = this.meter.add(meta.mediaTime, v.playbackRate, decoded)
+        if (fps !== null) {
+          this.measuredFps = fps
+          this.renderInfo()
         }
       }
-      last = meta
       v.requestVideoFrameCallback?.(tick)
     }
     v.requestVideoFrameCallback(tick)
@@ -624,13 +742,13 @@ export class Player {
 
   private renderTime(): void {
     const v = this.video
-    const duration = Number.isFinite(v.duration) ? v.duration : 0
-    this.seek.max = String(duration)
+    const duration = this.mediaDuration()
+    this.seek.max = String(Number.isFinite(duration) ? duration : 0)
     if (!this.seeking) {
       this.seek.value = String(v.currentTime)
     }
     setFill(this.seek)
-    this.time.textContent = this.source ? `${formatTime(v.currentTime)} / ${formatTime(v.duration)}` : '--:-- / --:--'
+    this.time.textContent = this.source ? `${formatTime(v.currentTime)} / ${formatTime(duration)}` : '--:-- / --:--'
   }
 
   private renderVolume(): void {
@@ -646,15 +764,19 @@ export class Player {
       return
     }
     const v = this.video
-    const s = this.s
-    const rows: Array<[string, string]> = [
-      [s.infoName, this.source.name],
-      [s.infoSize, formatBytes(this.source.size)],
-      [s.infoResolution, v.videoWidth ? `${v.videoWidth} × ${v.videoHeight}` : s.unknown],
-      [s.infoDuration, formatTime(v.duration)],
-      [s.infoFps, this.fpsMeasured ? `${this.fps}` : `— (${s.infoFpsPending})`],
-      [s.infoType, this.source.type || s.unknown]
-    ]
+    const rows = infoRows(
+      {
+        size: this.source.size,
+        picture: !this.root.classList.contains('audio'),
+        width: v.videoWidth,
+        height: v.videoHeight,
+        duration: this.mediaDuration(),
+        fps: this.source.fps ? displayFps(this.source.fps) : this.measuredFps,
+        type: this.source.type
+      },
+      this.s,
+      this.options.locale
+    )
     this.info.replaceChildren(
       ...rows.flatMap(([label, value]) => {
         const dt = el('dt')
@@ -668,7 +790,8 @@ export class Player {
 
   private renderError(): void {
     const error = this.video.error
-    if (!error || !this.source) {
+    // An error during the duration probe opens the file again without it (ready()).
+    if (!error || !this.source || this.probe) {
       return
     }
     const s = this.s

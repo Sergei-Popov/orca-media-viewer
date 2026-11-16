@@ -4,41 +4,40 @@
   "execution": "sandboxed-ui",
   "id": "media-viewer",
   "name": "Media Viewer",
-  "version": "0.3.0",
-  "description": "Video and audio in Orca's editor tabs: plays .mkv, .avi, .mka and .weba, which Orca cannot show (AVI is converted offline in the tab), and adds a full player view to .mp4, .mov, .webm, .mp3, .flac and other media. Speed, frame stepping, repeat, frame snapshots, file info and keyboard shortcuts.",
-  "author": { "name": "Sergei Popov", "url": "https://github.com/Sergei-Popov" },
+  "version": "0.3.1",
+  "description": "A media player in Orca's editor tabs: plays .mkv, .avi, .mka and .weba, which Orca cannot show (AVI is converted offline in the tab), and a full player view for .mp4, .mov, .webm, .mp3, .flac and more. Speed, frame stepping, repeat, frame snapshots, file info, shortcuts, media file icons.",
+  "author": {
+    "name": "Sergei Popov",
+    "url": "https://github.com/Sergei-Popov"
+  },
   "repository": "https://github.com/Sergei-Popov/orca-media-viewer",
   "license": "MIT AND LGPL-2.1-or-later",
   "icon": "images/icon.png",
   "cover": {
     "path": "images/cover.png",
-    "alt": "Media Player in an Orca tab: a paused clip of a sunset over hills, with the seek bar, volume, speed, repeat, snapshot, fit, info and full screen controls below."
+    "alt": "A clip paused at 0:06 of 0:12 in Media Viewer, above the seek bar, frame steps, volume, speed, repeat, snapshot, fit, info."
   },
   "screenshots": [
     {
-      "path": "images/player-dark.png",
-      "alt": "An .mkv video paused at 0:12 in the Media Player tab with Orca's dark theme.",
-      "caption": "Plays .mkv in a tab, with speed, frame stepping, repeat and snapshots.",
-      "theme": "dark"
+      "path": "images/shot-1-avi.png",
+      "alt": "An .avi converted to MP4 in the tab, offline, paused at 0:02; File info: 9.2 MB, 1280 × 720, 1:00, frame rate 24, .avi."
     },
     {
-      "path": "images/player-light.png",
-      "alt": "The same video in the Media Player tab with Orca's light theme.",
-      "caption": "Plays .mkv in a tab, with speed, frame stepping, repeat and snapshots.",
-      "theme": "light"
+      "path": "images/shot-2-frame-step.png",
+      "alt": "Speed set to 0.5× and the clip paused at 0:04; the two buttons beside Play step it one frame back or forward."
     },
     {
-      "path": "images/info.png",
-      "alt": "The file info overlay over the video: file, size 1.9 MB, resolution 1920 × 1080, duration 0:30, frame rate, type .mkv.",
-      "caption": "File info: size, resolution, duration, frame rate and type (I)."
+      "path": "images/shot-3-snapshot.png",
+      "alt": "The camera button (S) saves the paused frame at 0:08 as a PNG file you name, and the player confirms: Frame saved."
     },
     {
-      "path": "images/audio.png",
-      "alt": "An audio file in the Media Player: a music note cover above the seek bar at 1:04 of 3:34.",
-      "caption": "Audio gets a cover instead of a black frame."
+      "path": "images/shot-4-mp4.png",
+      "alt": "Open .mp4, .mov or .webm in Media Player for speed, frame steps and snapshots, at 0:11 of 0:12. Shown in Orca's light theme."
     }
   ],
-  "engines": { "orca": ">=1.4.248" },
+  "engines": {
+    "orca": ">=1.4.248"
+  },
   "pluginApi": 1,
   "contributes": {
     "customEditors": [
@@ -46,7 +45,10 @@
         "id": "media",
         "title": "Media Player",
         "icon": "icons/video.png",
-        "extensions": [".mkv", ".avi"],
+        "extensions": [
+          ".mkv",
+          ".avi"
+        ],
         "entry": "src/editor.ts",
         "priority": "default",
         "contentKind": "bytes",
@@ -56,7 +58,10 @@
         "id": "media-audio",
         "title": "Media Player",
         "icon": "icons/audio.png",
-        "extensions": [".mka", ".weba"],
+        "extensions": [
+          ".mka",
+          ".weba"
+        ],
         "entry": "src/editor.ts",
         "priority": "default",
         "contentKind": "bytes",
@@ -66,7 +71,12 @@
         "id": "media-plus",
         "title": "Media Player",
         "icon": "icons/video.png",
-        "extensions": [".mp4", ".m4v", ".mov", ".webm"],
+        "extensions": [
+          ".mp4",
+          ".m4v",
+          ".mov",
+          ".webm"
+        ],
         "entry": "src/editor.ts",
         "priority": "option",
         "contentKind": "bytes",
@@ -76,7 +86,16 @@
         "id": "media-plus-audio",
         "title": "Media Player",
         "icon": "icons/audio.png",
-        "extensions": [".mp3", ".wav", ".m4a", ".aac", ".ogg", ".oga", ".flac", ".opus"],
+        "extensions": [
+          ".mp3",
+          ".wav",
+          ".m4a",
+          ".aac",
+          ".ogg",
+          ".oga",
+          ".flac",
+          ".opus"
+        ],
         "entry": "src/editor.ts",
         "priority": "option",
         "contentKind": "bytes",
