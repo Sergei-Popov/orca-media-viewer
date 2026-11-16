@@ -17,6 +17,7 @@ import {
   type KeyAction
 } from './format'
 import type { Strings } from './i18n'
+import { findDuration } from './duration'
 import { icon, type IconName } from './icons'
 import { FrameRateMeter, displayFps, frameStepTarget, stepAnchor, type PendingStep } from './rate'
 
@@ -277,7 +278,8 @@ export class Player {
     } else if (source.soundUndecoded) {
       this.showNotice(this.s.soundUndecoded)
     }
-    await this.findDuration()
+    // A recording or a pipe declares no duration: find it before the playhead is restored.
+    await findDuration(v)
     if (this.source !== source) {
       return
     }
@@ -290,35 +292,6 @@ export class Player {
     }
     this.renderTime()
     this.renderInfo()
-  }
-
-  /**
-   * WebM and Matroska written by recorders (MediaRecorder, a pipe, an unfinished capture) carry no
-   * duration, so Chromium reports Infinity until playback reaches the end. Seeking far past the
-   * end makes it scan the file and report the real duration; then the playhead goes back to 0.
-   */
-  private async findDuration(): Promise<void> {
-    const v = this.video
-    if (v.duration !== Number.POSITIVE_INFINITY) {
-      return
-    }
-    await new Promise<void>((resolve) => {
-      let timer = 0
-      const finish = () => {
-        window.clearTimeout(timer)
-        v.removeEventListener('durationchange', changed)
-        v.removeEventListener('seeked', finish)
-        resolve()
-      }
-      const changed = () => {
-        if (Number.isFinite(v.duration)) finish()
-      }
-      timer = window.setTimeout(finish, 5000)
-      v.addEventListener('durationchange', changed)
-      v.addEventListener('seeked', finish)
-      v.currentTime = 1e101
-    })
-    v.currentTime = 0
   }
 
   /** The duration, or where the seekable range ends when Chromium still has none; NaN if neither. */
