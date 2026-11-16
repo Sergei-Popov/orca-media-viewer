@@ -121,6 +121,8 @@ export type PendingStep = { target: number; anchor: number }
  *   used while the playhead is inside that frame;
  * - `pending` is the previous step, used while the playhead is still where that step put it and
  *   the new frame has not been presented yet (a key held down);
+ * - `shown` again when the playhead is up to one frame before it: a pause stops the clock a few
+ *   milliseconds behind the frame already on screen;
  * - otherwise the playhead is placed on a grid of frames from 0.
  */
 export function stepAnchor(
@@ -132,8 +134,12 @@ export function stepAnchor(
   if (shown !== null && currentTime >= shown - 0.001 && currentTime < shown + frameDuration + 0.001) {
     return shown
   }
+  // Before the paused check: a step back that is not presented yet also lands just before `shown`.
   if (pending && Math.abs(currentTime - pending.target) < 1e-4) {
     return pending.anchor
+  }
+  if (shown !== null && currentTime >= shown - frameDuration && currentTime < shown) {
+    return shown
   }
   return Math.floor(currentTime / frameDuration + 1e-6) * frameDuration
 }
