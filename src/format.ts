@@ -31,8 +31,18 @@ const AUDIO_TYPES = new Set(['mka', 'weba', 'mp3', 'wav', 'm4a', 'aac', 'ogg', '
 /** Playback speeds offered in the speed menu and stepped through with `<` and `>`. */
 export const RATES = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 3] as const
 
-/** Orca's limit for a document sent to a custom editor; Orca shows its own notice above it. */
-export const EDITOR_LIMIT_BYTES = 64 * 1024 * 1024
+/**
+ * The largest file Orca sends to a custom editor; Orca shows its own notice above it. Orca reads
+ * types it has no viewer for (`.mkv`, `.avi`, `.mka`, `.weba`) through its 50 MiB preview limit,
+ * and media it plays itself (`.mp4`, `.mov`, `.webm`, audio) through the 64 MiB editor bridge.
+ */
+export const DEFAULT_TYPE_LIMIT_BYTES = 50 * 1024 * 1024
+export const OPTION_TYPE_LIMIT_BYTES = 64 * 1024 * 1024
+
+/** Orca's size limit for a file of this type opened in Media Player. */
+export function editorLimitBytes(fileType: string | undefined): number {
+  return (OPTION_TYPES as readonly string[]).includes(normalizeType(fileType)) ? OPTION_TYPE_LIMIT_BYTES : DEFAULT_TYPE_LIMIT_BYTES
+}
 
 /** `.MP4` → `mp4`. */
 export function normalizeType(fileType: string | undefined): string {
@@ -112,12 +122,37 @@ export function timestampForFile(seconds: number): string {
   return `${two(h)}-${two(m)}-${two(s)}.${String(rest).padStart(3, '0')}`
 }
 
-/** `1536` → `1.5 KB`. Uses 1024 steps, like Finder's "binary" sizes in Orca's file tree. */
-export function formatBytes(bytes: number): string {
+/** Formats a number for Orca's UI language, without grouping: `1.5` → `1,5` in Russian. */
+export function formatNumber(value: number, locale: string | undefined, maxDigits = 2, minDigits = 0): string {
+  const options: Intl.NumberFormatOptions = { maximumFractionDigits: maxDigits, minimumFractionDigits: minDigits, useGrouping: false }
+  try {
+    return new Intl.NumberFormat(locale || 'en', options).format(value)
+  } catch {
+    return new Intl.NumberFormat('en', options).format(value)
+  }
+}
+
+/** `0.5` → `50%` (`50 %` in Russian). */
+export function formatPercentOf(fraction: number, locale: string | undefined): string {
+  const options: Intl.NumberFormatOptions = { style: 'percent', maximumFractionDigits: 0 }
+  try {
+    return new Intl.NumberFormat(locale || 'en', options).format(fraction)
+  } catch {
+    return new Intl.NumberFormat('en', options).format(fraction)
+  }
+}
+
+/** Size units from bytes up, as the UI language writes them. */
+export const BYTE_UNITS = ['B', 'KB', 'MB', 'GB', 'TB'] as const
+
+/**
+ * `1536` → `1.5 KB` (`1,5 КБ` with Russian units and locale). Uses 1024 steps, like Finder's
+ * "binary" sizes in Orca's file tree.
+ */
+export function formatBytes(bytes: number, units: readonly string[] = BYTE_UNITS, locale?: string): string {
   if (!Number.isFinite(bytes) || bytes < 0) {
     return '—'
   }
-  const units = ['B', 'KB', 'MB', 'GB', 'TB']
   let value = bytes
   let unit = 0
   while (value >= 1024 && unit < units.length - 1) {
@@ -125,12 +160,12 @@ export function formatBytes(bytes: number): string {
     unit += 1
   }
   const digits = unit === 0 || value >= 100 ? 0 : 1
-  return `${value.toFixed(digits)} ${units[unit]}`
+  return `${formatNumber(value, locale, digits, digits)} ${units[unit]}`
 }
 
-/** `1` → `1×`, `0.25` → `0.25×`. */
-export function formatRate(rate: number): string {
-  return `${Number(rate.toFixed(2))}×`
+/** `1` → `1×`, `0.25` → `0.25×` (`0,25×` in Russian). */
+export function formatRate(rate: number, locale?: string): string {
+  return `${formatNumber(rate, locale)}×`
 }
 
 /** The next speed in `RATES` up (`direction` 1) or down (-1); stays at the ends. */
@@ -165,20 +200,6 @@ export function baseName(name: string): string {
   return dot > 0 ? leaf.slice(0, dot) : leaf || 'video'
 }
 
-/** An estimate of frames per second from two presented frames, rounded to a common rate. */
-export function estimateFps(mediaTimeDelta: number, frameDelta: number): number | null {
-  if (!(mediaTimeDelta > 0) || !(frameDelta > 0)) {
-    return null
-  }
-  const raw = frameDelta / mediaTimeDelta
-  if (raw < 1 || raw > 240) {
-    return null
-  }
-  const common = [23.976, 24, 25, 29.97, 30, 48, 50, 59.94, 60, 90, 120, 144, 240]
-  const nearest = common.reduce((best, fps) => (Math.abs(fps - raw) < Math.abs(best - raw) ? fps : best))
-  return Math.abs(nearest - raw) / raw < 0.03 ? nearest : Math.round(raw * 100) / 100
-}
-
 /** Keyboard actions of the player. */
 export type KeyAction =
   | { kind: 'toggle-play' }
@@ -192,28 +213,66 @@ export type KeyAction =
   | { kind: 'rate'; direction: 1 | -1 }
   | { kind: 'rate-reset' }
   | { kind: 'loop' }
-  | { kind: 'fullscreen' }
   | { kind: 'info' }
   | { kind: 'snapshot' }
   | { kind: 'fit' }
 
 export type KeyInput = {
   key: string
+  /** The physical key (`KeyM`, `Comma`, `Digit5`), for layouts whose letters are not Latin. */
+  code?: string
   shiftKey?: boolean
   metaKey?: boolean
   ctrlKey?: boolean
   altKey?: boolean
 }
 
+/** The Latin key each shortcut's physical key types on a US layout. */
+const CODE_KEYS: Record<string, string> = {
+  KeyK: 'k',
+  KeyJ: 'j',
+  KeyL: 'l',
+  KeyM: 'm',
+  KeyR: 'r',
+  KeyI: 'i',
+  KeyS: 's',
+  KeyZ: 'z',
+  Comma: ',',
+  Period: '.'
+}
+
 /**
  * The action for a key press, or null to leave the key to Orca. Keys with Cmd, Ctrl or Alt are
  * never taken, so Orca's own shortcuts keep working inside the player.
+ *
+ * A layout that does not type Latin letters (Russian ЙЦУКЕН and others) puts other characters on
+ * the shortcut keys, so an unknown character falls back to the physical key (`event.code`): `ь` on
+ * the M key mutes, `ю` on the period key steps a frame. A Latin character keeps its own meaning,
+ * so Dvorak or AZERTY users get the letter they typed, and digits fall back only without Shift
+ * (AZERTY types `&` on the 1 key).
  */
 export function actionForKey(input: KeyInput): KeyAction | null {
   if (input.metaKey || input.ctrlKey || input.altKey) {
     return null
   }
-  const key = input.key
+  const direct = actionForCharacter(input.key, input.shiftKey === true)
+  // Named keys (`ArrowLeft`, `Dead`, `Process`) are never remapped; only a typed character is.
+  if (direct || !input.code || input.key.length !== 1) {
+    return direct
+  }
+  const digit = /^Digit([0-9])$/.exec(input.code)
+  if (digit) {
+    return input.shiftKey ? null : actionForCharacter(digit[1], false)
+  }
+  const latin = CODE_KEYS[input.code]
+  if (!latin || /^[A-Za-z]$/.test(input.key)) {
+    return null
+  }
+  const key = input.shiftKey && latin === ',' ? '<' : input.shiftKey && latin === '.' ? '>' : latin
+  return actionForCharacter(key, input.shiftKey === true)
+}
+
+function actionForCharacter(key: string, shiftKey: boolean): KeyAction | null {
   if (/^[0-9]$/.test(key)) {
     return { kind: 'seek-fraction', fraction: Number(key) / 10 }
   }
@@ -223,9 +282,9 @@ export function actionForKey(input: KeyInput): KeyAction | null {
     case 'K':
       return { kind: 'toggle-play' }
     case 'ArrowLeft':
-      return { kind: 'seek', delta: input.shiftKey ? -1 : -5 }
+      return { kind: 'seek', delta: shiftKey ? -1 : -5 }
     case 'ArrowRight':
-      return { kind: 'seek', delta: input.shiftKey ? 1 : 5 }
+      return { kind: 'seek', delta: shiftKey ? 1 : 5 }
     case 'j':
     case 'J':
       return { kind: 'seek', delta: -10 }
@@ -256,9 +315,6 @@ export function actionForKey(input: KeyInput): KeyAction | null {
     case 'r':
     case 'R':
       return { kind: 'loop' }
-    case 'f':
-    case 'F':
-      return { kind: 'fullscreen' }
     case 'i':
     case 'I':
       return { kind: 'info' }
@@ -277,18 +333,20 @@ export function actionForKey(input: KeyInput): KeyAction | null {
 export type InfoFacts = {
   /** The file's size in bytes. */
   size: number
-  /** The picture's size; 0 when there is no picture (audio) or it is not known yet. */
+  /** The player shows a picture; audio (and video whose codec does not play) has no picture rows. */
+  picture: boolean
+  /** The picture's size; 0 when it is not known yet. */
   width: number
   height: number
   /** In seconds; NaN until the metadata is in. */
   duration: number
-  /** Frames per second measured during playback, or null until then. */
+  /** Frames per second, declared (AVI) or measured during playback, or null until it is known. */
   fps: number | null
   /** The file type, e.g. `.mkv`, or '' when Orca did not send one. */
   type: string
 }
 
-/** The labels and fallbacks the info overlay needs, from `Strings`. */
+/** The labels, units and fallbacks the info overlay needs, from `Strings`. */
 export type InfoLabels = {
   infoSize: string
   infoResolution: string
@@ -297,18 +355,22 @@ export type InfoLabels = {
   infoFpsPending: string
   infoType: string
   unknown: string
+  sizeUnits: readonly string[]
 }
 
 /**
  * The rows of the file info overlay, as [label, value]. There is no file name row: Orca never
  * tells a custom editor the file's name or path, and a made-up name would read as the real one.
  */
-export function infoRows(facts: InfoFacts, s: InfoLabels): Array<[string, string]> {
-  return [
-    [s.infoSize, formatBytes(facts.size)],
-    [s.infoResolution, facts.width && facts.height ? `${facts.width} × ${facts.height}` : s.unknown],
-    [s.infoDuration, formatTime(facts.duration)],
-    [s.infoFps, facts.fps ? `${facts.fps}` : `— (${s.infoFpsPending})`],
-    [s.infoType, facts.type || s.unknown]
-  ]
+export function infoRows(facts: InfoFacts, s: InfoLabels, locale?: string): Array<[string, string]> {
+  const rows: Array<[string, string]> = [[s.infoSize, formatBytes(facts.size, s.sizeUnits, locale)]]
+  if (facts.picture) {
+    rows.push([s.infoResolution, facts.width && facts.height ? `${facts.width} × ${facts.height}` : s.unknown])
+  }
+  rows.push([s.infoDuration, formatTime(facts.duration)])
+  if (facts.picture) {
+    rows.push([s.infoFps, facts.fps ? formatNumber(facts.fps, locale, 3) : `— (${s.infoFpsPending})`])
+  }
+  rows.push([s.infoType, facts.type || s.unknown])
+  return rows
 }

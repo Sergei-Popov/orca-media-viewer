@@ -12,7 +12,6 @@ const en = {
   frameForward: 'Next frame (.)',
   snapshot: 'Save frame as PNG (S)',
   fit: 'Fit to window / actual size (Z)',
-  fullscreen: 'Full screen (F)',
   info: 'File info (I)',
   seek: 'Position',
   loading: 'Loading…',
@@ -24,22 +23,32 @@ const en = {
   infoFpsPending: 'measured during playback',
   aviConverting: 'Preparing AVI for playback…',
   aviCodec: 'This AVI uses the {codec} video codec, which Media Player cannot decode.',
+  aviDamaged: 'The AVI file is damaged: its {codec} video cannot be decoded.',
   aviEncoder: 'Orca cannot re-encode video here: WebCodecs is not available.',
+  aviTooLarge: 'The video frame is {size} pixels, larger than Orca’s video encoder accepts.',
   aviNotAvi: 'The file is damaged or is not an AVI file.',
   aviNoStreams: 'The AVI file has no video or sound.',
+  aviSoundCodec: 'The AVI file has only sound, in {codec}, which Media Player cannot decode.',
   aviMemory: 'Not enough memory to convert this AVI file.',
   aviFailed: 'The AVI file could not be converted.',
   infoType: 'Type',
   unknown: 'unknown',
   errorTitle: 'This file cannot be played',
   errorDecode:
-    'The codec is not supported by Orca’s built-in Chromium. H.264, VP8/VP9 and AV1 play everywhere; HEVC (H.265) needs hardware support; ProRes, MPEG-2, DivX and AVI do not play.',
+    'The codec is not supported by Orca’s built-in Chromium. H.264, VP8/VP9 and AV1 play everywhere; HEVC (H.265) needs hardware support; ProRes, and MPEG-2 or DivX outside AVI, do not play. AC3, E-AC3, DTS and TrueHD sound does not play.',
   errorNetwork: 'The file could not be read.',
   errorText: 'Orca sent this file as text; the video viewer needs its raw bytes.',
   errorGeneric: 'Playback failed.',
   snapshotSaved: 'Frame saved',
   snapshotFailed: 'Could not save the frame',
-  readOnly: 'read-only'
+  noPicture: 'This video’s codec ({codec}) does not play in Orca; playing sound only',
+  noPictureUnknown: 'This video’s codec does not play in Orca; playing sound only',
+  soundDropped: 'Sound in {codec} is not supported; playing without sound',
+  readOnly: 'read-only',
+  /** Size units, from bytes up. */
+  sizeUnits: ['B', 'KB', 'MB', 'GB', 'TB'] as readonly string[],
+  /** A seek badge: `{n}` is the signed number of seconds. */
+  seekBadge: '{n}s'
 }
 
 export type Strings = typeof en
@@ -56,7 +65,6 @@ const ru: Strings = {
   frameForward: 'Следующий кадр (.)',
   snapshot: 'Сохранить кадр в PNG (S)',
   fit: 'Вписать в окно / исходный размер (Z)',
-  fullscreen: 'Во весь экран (F)',
   info: 'Сведения о файле (I)',
   seek: 'Позиция',
   loading: 'Загрузка…',
@@ -68,22 +76,30 @@ const ru: Strings = {
   infoFpsPending: 'измеряется при воспроизведении',
   aviConverting: 'Подготовка AVI к воспроизведению…',
   aviCodec: 'В этом AVI видео в кодеке {codec}, его Media Player не декодирует.',
+  aviDamaged: 'Файл AVI повреждён: его видео {codec} не декодируется.',
   aviEncoder: 'Orca не может перекодировать видео: WebCodecs недоступен.',
+  aviTooLarge: 'Кадр видео — {size} пикселей, больше, чем принимает видеокодер Orca.',
   aviNotAvi: 'Файл повреждён или это не AVI.',
   aviNoStreams: 'В файле AVI нет ни видео, ни звука.',
+  aviSoundCodec: 'В файле AVI только звук, и он в кодеке {codec}, который Media Player не декодирует.',
   aviMemory: 'Не хватает памяти, чтобы преобразовать этот AVI.',
   aviFailed: 'Не удалось преобразовать файл AVI.',
   infoType: 'Тип',
   unknown: 'неизвестно',
   errorTitle: 'Этот файл не воспроизводится',
   errorDecode:
-    'Кодек не поддерживается встроенным в Orca Chromium. H.264, VP8/VP9 и AV1 работают везде; HEVC (H.265) — только с аппаратной поддержкой; ProRes, MPEG-2, DivX и AVI не воспроизводятся.',
+    'Кодек не поддерживается встроенным в Orca Chromium. H.264, VP8/VP9 и AV1 работают везде; HEVC (H.265) — только с аппаратной поддержкой; ProRes, а также MPEG-2 и DivX не в AVI не воспроизводятся. Звук AC3, E-AC3, DTS и TrueHD не воспроизводится.',
   errorNetwork: 'Не удалось прочитать файл.',
   errorText: 'Orca передала файл как текст, а просмотрщику нужны исходные байты.',
   errorGeneric: 'Ошибка воспроизведения.',
   snapshotSaved: 'Кадр сохранён',
   snapshotFailed: 'Не удалось сохранить кадр',
-  readOnly: 'только чтение'
+  noPicture: 'Видеокодек этого файла ({codec}) не воспроизводится в Orca; играет только звук',
+  noPictureUnknown: 'Видеокодек этого файла не воспроизводится в Orca; играет только звук',
+  soundDropped: 'Звук в {codec} не поддерживается; видео играет без звука',
+  readOnly: 'только чтение',
+  sizeUnits: ['Б', 'КБ', 'МБ', 'ГБ', 'ТБ'],
+  seekBadge: '{n} с'
 }
 
 /** Strings for a BCP-47 tag: Russian for `ru*`, English otherwise. */
