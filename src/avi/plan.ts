@@ -45,14 +45,59 @@ export function audioBitrate(channels: number): number {
   return channels >= 2 ? 160_000 : 96_000
 }
 
-/** Error codes the worker reports; see aviErrorText. */
+/** Error codes the worker reports; see aviErrorText in messages.ts. */
 export type AviErrorCode =
   | 'not-avi'
   | 'no-streams'
   | 'video-codec'
   | 'encoder'
+  | 'too-large'
   | 'memory'
   | 'failed'
+
+/**
+ * The video decoders built into vendor/ffmpeg (DECODERS in wasm/build.sh, listed in
+ * vendor/ffmpeg/BUILD-INFO). When the decoder cannot open one of these, the codec is supported
+ * and the file is damaged.
+ */
+export const BUILT_IN_VIDEO_DECODERS: readonly string[] = [
+  'mpeg4',
+  'msmpeg4v1',
+  'msmpeg4v2',
+  'msmpeg4v3',
+  'h263',
+  'h264',
+  'mjpeg',
+  'mpeg1video',
+  'mpeg2video',
+  'rawvideo'
+]
+
+/**
+ * The muxer's video track. It has no `frameRate`: mp4-muxer rejects one that is not a whole
+ * number (23.976, 29.97, 12.5) and otherwise keeps its own 57600 timescale, which holds the
+ * microsecond timestamps of any rate; a timescale of the rounded rate would shift 23.976 frames.
+ */
+export function muxerVideoTrack(codec: 'avc' | 'vp9', width: number, height: number): { codec: 'avc' | 'vp9'; width: number; height: number } {
+  return { codec, width, height }
+}
+
+/** BT.601 as WebCodecs names it: what SD MPEG-4, DivX, Xvid and MJPEG video uses. */
+export const BT601 = { matrix: 'smpte170m', primaries: 'smpte170m', transfer: 'smpte170m', fullRange: false } as const
+
+/**
+ * The colour space to tag the decoded frames with. The decoder hands over I420 planes with no
+ * colour description, and WebCodecs would call them BT.709; SD video (under 720 lines) is BT.601,
+ * so it is tagged that way and the MP4's colour box says so. HD keeps WebCodecs' BT.709.
+ */
+export function frameColorSpace(height: number): typeof BT601 | undefined {
+  return height > 0 && height < 720 ? BT601 : undefined
+}
+
+/** `1920`, `1080` → `1920 × 1080`, for the 'too-large' message. */
+export function frameSizeText(width: number, height: number): string {
+  return `${width} × ${height}`
+}
 
 /** The worker's code for a negative result of avi_open (see wasm/avi.c). */
 export function openErrorCode(result: number): AviErrorCode {
