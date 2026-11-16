@@ -169,6 +169,8 @@ export class Player {
   private generation = 0
   /** The running duration probe: aborted when another source opens. */
   private probe: AbortController | null = null
+  /** Where the opening source goes once it is ready: an outside change meanwhile keeps it. */
+  private restoring: { at: number; playing: boolean } | null = null
   private timers = new Map<string, number>()
   private disposers: Array<() => void> = []
 
@@ -247,8 +249,14 @@ export class Player {
   /** Plays `source`, replacing the current one. */
   load(source: VideoSource, options: LoadOptions = {}): void {
     const previous = this.source
-    const resumeAt = options.keepPosition && previous ? this.video.currentTime : 0
-    const resumePlaying = options.keepPosition && previous ? !this.video.paused : options.autoplay === true
+    // While the previous source still opens, its playhead is the probe's, not the viewer's: keep
+    // the position it was going back to.
+    const keep =
+      options.keepPosition && previous
+        ? (this.restoring ?? { at: this.video.currentTime, playing: !this.video.paused })
+        : null
+    const resumeAt = keep ? keep.at : 0
+    const resumePlaying = keep ? keep.playing : options.autoplay === true
     this.source = source
     this.open(source, resumeAt, resumePlaying, true)
     if (previous && previous.url !== source.url) {
@@ -261,6 +269,7 @@ export class Player {
     const generation = ++this.generation
     this.probe?.abort()
     this.probe = null
+    this.restoring = { at: resumeAt, playing: resumePlaying }
     this.meter.reset()
     this.measuredFps = null
     this.shownTime = null
@@ -319,6 +328,7 @@ export class Player {
         return
       }
     }
+    this.restoring = null
     if (resumeAt > 0) {
       v.currentTime = Math.min(resumeAt, this.mediaDuration() || resumeAt)
     }
@@ -360,6 +370,7 @@ export class Player {
     this.generation += 1
     this.probe?.abort()
     this.probe = null
+    this.restoring = null
     if (this.source) {
       URL.revokeObjectURL(this.source.url)
     }
