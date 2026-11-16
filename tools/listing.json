@@ -12,7 +12,7 @@
   },
   "cover": {
     "out": "images/cover.png",
-    "alt": "A clip paused at 0:06 of 0:12 in Media Viewer, above the seek bar, frame steps, volume, speed, repeat, snapshot and info.",
+    "alt": "A clip paused at 0:06 of 0:12 in Media Viewer, above the seek bar, frame steps, volume, speed, repeat, snapshot, fit, info.",
     "tagline": "Play .mkv and .avi in Orca tabs, frame by frame.",
     "chips": [
       ".mkv",
