@@ -8,6 +8,7 @@ import { AviConversionError, convertAvi, type AviConversion } from './avi/conver
 import { aviErrorText, aviSoundLoss } from './avi/messages'
 import { formatPercent } from './avi/plan'
 import { probeMedia, readAviStreams } from './container'
+import { probesDuration } from './duration'
 import { isAudioType, mimeFor, normalizeType } from './format'
 import { stringsFor } from './i18n'
 import { Player, type VideoSource } from './player'
@@ -101,7 +102,8 @@ if (!api) {
       frameDuration: probe.frameDuration,
       hasVideoTrack: probe.hasVideo,
       videoCodec: probe.videoCodec,
-      droppedSound: probe.droppedSound
+      droppedSound: probe.droppedSound,
+      durationProbe: probesDuration(fileType, probe.tracks)
     })
   })
 }
